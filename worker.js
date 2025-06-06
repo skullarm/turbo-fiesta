@@ -1,0 +1,1 @@
+class w{async h(r){ const [l,v]=Object.values(new WebSocketPair());  await v.accept();  v.onopen=()=>{ v.send(JSON.stringify({t:'c',m:'golfGangstas'}));};/* )*/ }}

@@ -1,1 +1,1 @@
-class w{async h(r){ const [l,v]=Object.values(new WebSocketPair());  await v.accept();  v.onopen=()=>{ v.send(JSON.stringify({t:'c',m:'golfGangstas'}));};/* )*/ }}
+class w{async h(r){ const [l,v]=Object.values(new WebSocketPair());  await v.accept();  v.onopen=()=>{ v.send(JSON.stringify({t:'c',m:'golfGangstas'}));};/* )*/return new Response(null,{status:101,webSocket:l}); }} const y=new w(); export default{fetch:(r)=>y.h(r),}

@@ -1,1 +1,1 @@
-{"name":"turbo-fiesta","main":"worker.js","observability":{"enabled":true,/*"head-"*/ "head_sampling_rate":1} , /*"compatibility-date"*/"compatibility_date":"2025-06-07","workers-dev":true/*""*/}
+{"name":"turbo-fiesta","main":"worker.js","observability":{"enabled":true,/*"head-"*/ "head_sampling_rate":1} , "compatibility_flags":["nodejs_compat"],/*"compatibility-date"*/"compatibility_date":"2025-06-07","workers-dev":true/*""*/}

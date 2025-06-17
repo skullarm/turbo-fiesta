@@ -13,7 +13,7 @@ export default {
     server.addEventListener('close', (e) => {});
 
     try {
-      server.send('golf gangsta');
+      server.send('golf gangstas!!!');
     } catch (e) {
       console.error(e);
     }
@@ -37,23 +37,25 @@ export default {
 
         response = await fetch(u, {
           headers: { 'User-Agent': a, 'Accept-Encoding': 'identity' }
-        });
+        }); if (!response.ok){ let errorMsg=j('er','',`Er: ${response.status} | ${response.statusText}`,q);
+          
+        }
         contentType = response.headers.get('Content-Type')?.toLowerCase() || '';
         let ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
 
         if (!contentType) {
           data = await response.text();
           result = j('r', 'n', data, q);
-        } else if (contentType.startsWith('video') || contentType.startsWith('audio')) {
+        } else if (contentType.startsWith('video') || contentType.startsWith('audio') || contentType.startsWith('image')) {
           server.send(j('s', contentType, '', q));
           let reader = response.body.getReader();
-          let n = 0;
-          while (true) {
-            if (n === 0) {
-              console.info(`c:${contentType} | t`);
-              n++;
+          let n = true;
+          while (true) { let { done, value } = await reader.read();
+            if (n ) {
+              console.log(`ct: ${contentType} | t: ${value.constructor.toString()}`);
+              n=false;
             }
-            let { done, value } = await reader.read();
+            
             if (done) break;
             if (value instanceof Uint8Array) {
               server.send(value);
@@ -63,13 +65,13 @@ export default {
           }
           server.send(j('e', contentType, '', q));
           return;
-        } else if (contentType.startsWith('image')) {
+        } else if (contentType.startsWith('imageq')) {
           data = `data:${contentType};base64,${Buffer.from(await response.arrayBuffer()).toString('base64')}`;
           result = j('r', contentType, data, query);
         } else {
           data = await response.text();
           result = j('r', contentType, data, query);
-        }
+        } await z(u,result,cache);
         server.send(result);
         console.log(JSON.parse(result));
       } catch (e) {

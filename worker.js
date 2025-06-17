@@ -10,7 +10,7 @@ export default {
       console.error(e);
     }
 
-    server.addEventListener('close', (e) => {});
+    server.addEventListener('close', (e) => {server.close()});
 
     try {
       server.send('golf gangstas!!!');
@@ -19,7 +19,7 @@ export default {
     }
 
     server.addEventListener('message', async (m) => {
-      server.send('c');
+      
       let contentType, query;
       try {
         const { u, a, q } = JSON.parse(m.data);

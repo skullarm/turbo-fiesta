@@ -78,7 +78,7 @@ export default {
           result = j('r', 'n', data, q);
         } else if (
           contentType.startsWith('video') ||
-          contentType.startsWith('audio')
+          contentType.startsWith('audio') || contentType.startsWith('image')
         ) {
           server.send(j('s', contentType, '', q));
           let reader = response.body.getReader();
@@ -100,7 +100,7 @@ export default {
           }
           server.send(j('e', contentType, '', q));
           return;
-        } else if (contentType.startsWith('image')) {
+        } else if (contentType.startsWith('image7')) {
           data = `data:${contentType};base64,${Buffer.from(
             await response.arrayBuffer()
           ).toString('base64')}`;

@@ -10,7 +10,9 @@ export default {
       console.error(e);
     }
 
-    server.addEventListener('close', (e) => {server.close()});
+    server.addEventListener('close', (e) => {
+      server.close();
+    });
 
     try {
       server.send('golf gangstas!!!');
@@ -35,26 +37,37 @@ export default {
         }
 
         response = await fetch(u, {
-          headers: { 'User-Agent': a, 'Accept-Encoding': 'identity','Accept-Language': 'en-US,en;q=0.9' }
-        }); if (!response.ok){ let errorMsg=j('er','',`Er: ${response.status} | ${response.statusText}`,q);
-          
+          headers: {
+            'User-Agent': a,
+            'Accept-Encoding': 'identity',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
+          }
+        });
+
+        if (!response.ok) {
+          let errorMsg = j('er', '', `Er: ${response.status} | ${response.statusText}`, q);
+          console.log(JSON.parse(errorMsg));
+          server.send(errorMsg);
+          return;
         }
+
         contentType = response.headers.get('Content-Type')?.toLowerCase() || '';
         let ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
 
         if (!contentType) {
           data = await response.text();
           result = j('r', 'n', data, q);
-        } else if (contentType.startsWith('video') || contentType.startsWith('audio') || contentType.startsWith('image')) {
+        } else if (contentType.startsWith('video') || contentType.startsWith('audio')) {
           server.send(j('s', contentType, '', q));
           let reader = response.body.getReader();
           let n = true;
-          while (true) { let { done, value } = await reader.read();
-            if (n ) {
+          while (true) {
+            let { done, value } = await reader.read();
+            if (n) {
               console.log(`ct: ${contentType} | t: ${value.constructor.toString()}`);
-              n=false;
+              n = false;
             }
-            
             if (done) break;
             if (value instanceof Uint8Array) {
               server.send(value);
@@ -64,13 +77,20 @@ export default {
           }
           server.send(j('e', contentType, '', q));
           return;
-        } else if (contentType.startsWith('imageq')) {
+        } else if (contentType.startsWith('image')) {
           data = `data:${contentType};base64,${Buffer.from(await response.arrayBuffer()).toString('base64')}`;
           result = j('r', contentType, data, query);
         } else {
-          data = await response.text();
+          if (ce === 'gzip' || ce === 'br') {
+            const decompressed = await decompress(response.body, ce);
+            data = await decompressed.text();
+          } else {
+            data = await response.text();
+          }
           result = j('r', contentType, data, query);
-        } await z(u,result,cache);
+        }
+
+        await z(u, result, cache);
         server.send(result);
         console.log(JSON.parse(result));
       } catch (e) {
@@ -101,4 +121,27 @@ async function z(u, x, o) {
 
 function j(t, c, d, q) {
   return JSON.stringify({ t, c, d, q });
+}
+
+async function decompress(body, encoding) {
+  let format;
+  if (encoding === 'gzip') {
+    format = 'gzip';
+  } else if (encoding === 'br') {
+    format = 'brotli';
+  } else {
+    throw new Error(`Unsupported encoding: ${encoding}`);
+  }
+
+  const ds = new DecompressionStream(format);
+  const decompressedStream = body.pipeThrough(ds);
+  const textStream = decompressedStream.pipeThrough(new TextDecoderStream('utf-8'));
+  const reader = textStream.getReader();
+  let result = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    result += value;
+  }
+  return new Response(result);
 }

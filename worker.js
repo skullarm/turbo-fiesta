@@ -23,7 +23,17 @@ export default {
     server.addEventListener('message', async (m) => {
       let contentType, query;
       try {
-        const { u, a, q } = JSON.parse(m.data);
+        const { u, a, q, au } = JSON.parse(m.data);
+        let dt = new Date();
+        let y = dt.getUTCFullYear();
+        let mn = dt.getUTCMonth();
+        let dd = dt.getUTCDate();/*
+        let mAu = btoa(`${y}${mn}${dt}`);*/ let mAu ='123456';
+        if (mAu !== au) {
+          let msg = j('er', contentType, `er: auth error`, query);
+          server.send(msg);
+          return;
+        } server.send(j('info','',`${au}`,query));
         query = q;
         let response, data, result;
         const cache = caches.default;
@@ -39,14 +49,20 @@ export default {
         response = await fetch(u, {
           headers: {
             'User-Agent': a,
-            'Accept-Encoding': 'identity',
+            'Accept-Encoding': 'gzip, br',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept': 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
+            'Accept':
+              'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
           }
         });
 
         if (!response.ok) {
-          let errorMsg = j('er', '', `Er: ${response.status} | ${response.statusText}`, q);
+          let errorMsg = j(
+            'er',
+            '',
+            `Er: ${response.status} | ${response.statusText} | ${u}`,
+            query
+          );
           console.log(JSON.parse(errorMsg));
           server.send(errorMsg);
           return;
@@ -58,14 +74,19 @@ export default {
         if (!contentType) {
           data = await response.text();
           result = j('r', 'n', data, q);
-        } else if (contentType.startsWith('video') || contentType.startsWith('audio')) {
+        } else if (
+          contentType.startsWith('video') ||
+          contentType.startsWith('audio')
+        ) {
           server.send(j('s', contentType, '', q));
           let reader = response.body.getReader();
           let n = true;
           while (true) {
             let { done, value } = await reader.read();
             if (n) {
-              console.log(`ct: ${contentType} | t: ${value.constructor.toString()}`);
+              console.log(
+                `ct: ${contentType} | t: ${value.constructor.toString()}`
+              );
               n = false;
             }
             if (done) break;
@@ -78,7 +99,9 @@ export default {
           server.send(j('e', contentType, '', q));
           return;
         } else if (contentType.startsWith('image')) {
-          data = `data:${contentType};base64,${Buffer.from(await response.arrayBuffer()).toString('base64')}`;
+          data = `data:${contentType};base64,${Buffer.from(
+            await response.arrayBuffer()
+          ).toString('base64')}`;
           result = j('r', contentType, data, query);
         } else {
           if (ce === 'gzip' || ce === 'br') {

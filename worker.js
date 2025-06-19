@@ -36,7 +36,7 @@ export default {
         }
 
         response = await fetch(u, {
-          headers: { 'User-Agent': a, 'Accept-Encoding': 'identity' }
+          headers: { 'User-Agent': a, 'Accept-Encoding': 'identity','Accept-Language': 'en-US,en;q=0.9' }
         }); if (!response.ok){ let errorMsg=j('er','',`Er: ${response.status} | ${response.statusText}`,q);
           
         }

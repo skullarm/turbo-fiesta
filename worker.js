@@ -50,7 +50,8 @@ export default {
           headers: {
             'User-Agent': a,
             'Accept-Encoding': 'identity',
-            'Accept-Language': 'en-US,en;q=0.9', 
+            'X-Forwarded-For': request.headers.get('CF-Connecting-IP'),
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept':
               'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
           }

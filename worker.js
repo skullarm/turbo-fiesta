@@ -19,7 +19,6 @@ export default {
     }
 
     server.addEventListener('message', async (m) => {
-      
       let contentType, query;
       try {
         const { u, a, q } = JSON.parse(m.data);

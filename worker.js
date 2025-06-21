@@ -31,7 +31,7 @@ export default {
         let mAu = btoa(`${y}${mn}${dt}`);*/ let mAu ='123456';
         if (mAu !== au) {
           let msg = j('er', contentType, `er: auth error`, query);
-          server.send(msg);
+          
           return;
         } server.send(j('info','',`${au}`,query));
         query = q;
@@ -66,7 +66,7 @@ export default {
             query
           );
           console.log(JSON.parse(errorMsg));
-          server.send(errorMsg); server.close();
+          server.send(errorMsg); 
           return;
         }
 
@@ -78,7 +78,7 @@ export default {
           result = j('r', 'n', data, q);
         } else if (
           contentType.startsWith('video') ||
-          contentType.startsWith('audio') || (contentType.startsWith('image') && si)
+          contentType.startsWith('audio') || (contentType.startsWith('image') && si==='true')
         ) {
           server.send(j('s', contentType, '', q));
           let reader = response.body.getReader();
@@ -100,11 +100,11 @@ export default {
           }
           server.send(j('e', contentType, '', q)); server.close();
           return;
-        } else if (contentType.startsWith('image') && !si) {/*
+        } else if (contentType.startsWith('image') && si!=='true'){/*
           data = `data:${contentType};base64,${Buffer.from(
             await response.arrayBuffer()
           ).toString('base64')}`;
-          result = j('r', contentType, data, query);*/ data=await response.arrayBuffer(); server.send(data); server.close(); return;
+          result = j('r', contentType, data, query);*/ data=await response.arrayBuffer(); server.send(data); return;
         } else {
           if (ce === 'gzip' || ce === 'br') {
             const decompressed = await decompress(response.body, ce);
@@ -116,7 +116,7 @@ export default {
         }
 
         await z(u, result, cache);
-        server.send(result); server.close();
+        server.send(result);
         console.log(JSON.parse(result));
       } catch (e) {
         let errorMsg = j('er', contentType, `er: ${e}`, query);

@@ -15,12 +15,12 @@ export default {
     });
 
     try {
-      server.send(j('info','','Golf Gangtas',''));
+      server.send(j('info','','Welcome Golf Gangstas!!',''));
     } catch (e) {
       console.error(e);
     }
 
-    server.addEventListener('message', async (m) => {
+    server.addEventListener('message', async (m) => { server.send(j('r', contentType,contentType,query));
       let contentType, query;
       try {
         const { u, a, q, au, si} = JSON.parse(m.data);

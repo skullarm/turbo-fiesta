@@ -15,12 +15,12 @@ export default {
     });
 
     try {
-      server.send(j('info','','Welcome Golf Gangstas!!',''));
+      server.send(j('info','','Welcome Golf Gangstas!!','',''));
     } catch (e) {
       console.error(e);
     }
 
-    server.addEventListener('message', async (m) => { server.send(j('r', contentType,contentType,query));
+    server.addEventListener('message', async (m) => { server.send(j('r', contentType,contentType,query,''));
       let contentType, query;
       try {
         const { u, a, q, au, si} = JSON.parse(m.data);
@@ -30,10 +30,10 @@ export default {
         let dd = dt.getUTCDate();/*
         let mAu = btoa(`${y}${mn}${dt}`);*/ let mAu ='123456';
         if (mAu !== au) {
-          let msg = j('er', contentType, `er: auth error`, query);
+          let msg = j('er', contentType, `er: auth error`, query,'');
           
           return;
-        } server.send(j('info','',`${au}`,query));
+        } server.send(j('info','',`${au}`,query,''));
         query = q;
         let response, data, result;
         const cache = caches.default;
@@ -63,7 +63,7 @@ export default {
             'er',
             '',
             `Er: ${response.status} | ${response.statusText} | ${u}`,
-            query
+            query,''
           );
           console.log(JSON.parse(errorMsg));
           server.send(errorMsg); 
@@ -75,12 +75,12 @@ export default {
 
         if (!contentType) {
           data = await response.text();
-          result = j('r', 'n', data, q);
+          result = j('r', 'n', data, q,'');
         } else if (
           contentType.startsWith('video') ||
           contentType.startsWith('audio') || (contentType.startsWith('image') && si==='true')
         ) {
-          server.send(j('s', contentType, '', q));
+          server.send(j('s', contentType, '', q,''));
           let reader = response.body.getReader();
           let n = true;
           while (true) {
@@ -98,7 +98,7 @@ export default {
               server.send(new Uint8Array(value));
             }
           }
-          server.send(j('e', contentType, '', q)); server.close();
+          server.send(j('e', contentType, '', q,''));
           return;
         } else if (contentType.startsWith('image') && si!=='true'){/*
           data = `data:${contentType};base64,${Buffer.from(
@@ -112,14 +112,14 @@ export default {
           } else {
             data = await response.text();
           }
-          result = j('r', contentType, data, query);
+          result = j('r', contentType, data, query,'');
         }
 
         await z(u, result, cache);
         server.send(result);
         console.log(JSON.parse(result));
       } catch (e) {
-        let errorMsg = j('er', contentType, `er: ${e}`, query);
+        let errorMsg = j('er', contentType, `er: ${e}`, query,'');
         console.log(JSON.parse(errorMsg));
       }
     });
@@ -144,8 +144,8 @@ async function z(u, x, o) {
   }
 }
 
-function j(t, c, d, q) {
-  return JSON.stringify({ t, c, d, q });
+function j(t, c, d, q, si){
+  return JSON.stringify({ t, c, d, q, si});
 }
 
 async function decompress(body, encoding) {

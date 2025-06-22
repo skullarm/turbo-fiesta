@@ -20,7 +20,7 @@ export default {
       console.error(e);
     }
 
-    server.addEventListener('message', async (m) => { server.send(j('r', contentType,contentType,query,''));
+    server.addEventListener('message', async (m) => { 
       let contentType, query;
       try {
         const { u, a, q, au, si} = JSON.parse(m.data);
@@ -33,7 +33,7 @@ export default {
           let msg = j('er', contentType, `er: auth error`, query,'');
           
           return;
-        } server.send(j('info','',`${au}`,query,''));
+        } 
         query = q;
         let response, data, result;
         const cache = caches.default;

@@ -121,7 +121,7 @@ export default {
       } catch (e) {
         let errorMsg = j('er', contentType, `er: ${e}`, query,'');
         console.log(JSON.parse(errorMsg));
-      }finally{ server.close();}
+      }
     });
 
     return new Response(null, { status: 101, webSocket: client });

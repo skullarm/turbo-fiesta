@@ -15,25 +15,25 @@ export default {
     });
 
     try {
-      server.send(j('info','','Welcome Golf Gangstas!!','',''));
+      server.send(j('info', '', 'Welcome Golf Gangstas!!', '', ''));
     } catch (e) {
       console.error(e);
     }
 
-    server.addEventListener('message', async (m) => { 
+    server.addEventListener('message', async (m) => {
       let contentType, query;
       try {
-        const { u, a, q, au, si} = JSON.parse(m.data);
+        const { u, a, q, au, si } = JSON.parse(m.data);
         let dt = new Date();
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();/*
-        let mAu = btoa(`${y}${mn}${dt}`);*/ let mAu ='123456';
+        let mAu = btoa(`${y}${mn}${dt}`);*/ let mAu = '123456';
         if (mAu !== au) {
-          let msg = j('er', contentType, `er: auth error`, query,'');
-          
+          let msg = j('er', contentType, `er: auth error`, query, '');
+
           return;
-        } 
+        }
         query = q;
         let response, data, result;
         const cache = caches.default;
@@ -63,10 +63,10 @@ export default {
             'er',
             '',
             `Er: ${response.status} | ${response.statusText} | ${u}`,
-            query,''
+            query, ''
           );
           console.log(JSON.parse(errorMsg));
-          server.send(errorMsg); 
+          server.send(errorMsg);
           return;
         }
 
@@ -75,12 +75,12 @@ export default {
 
         if (!contentType) {
           data = await response.text();
-          result = j('r', 'n', data, q,'');
+          result = j('r', 'n', data, q, '');
         } else if (
           contentType.startsWith('video') ||
-          contentType.startsWith('audio') || (contentType.startsWith('image') && si==='true')
+          contentType.startsWith('audio') || (contentType.startsWith('image') && si === 'true')
         ) {
-          server.send(j('s', contentType, '', q,''));
+          server.send(j('s', contentType, '', q, ''));
           let reader = response.body.getReader();
           let n = true;
           while (true) {
@@ -98,13 +98,13 @@ export default {
               server.send(new Uint8Array(value));
             }
           }
-          server.send(j('e', contentType, '', q,''));
+          server.send(j('e', contentType, '', q, ''));
           return;
-        } else if (contentType.startsWith('image') && si!=='true'){/*
+        } else if (contentType.startsWith('image') && si ==='false'){server.send(j('im',contentType,'',query,''));/*
           data = `data:${contentType};base64,${Buffer.from(
             await response.arrayBuffer()
           ).toString('base64')}`;
-          result = j('r', contentType, data, query);*/ data=await response.arrayBuffer(); server.send(data); return;
+          result = j('r', contentType, data, query);*/ data = await response.arrayBuffer(); server.send(data); return;
         } else {
           if (ce === 'gzip' || ce === 'br') {
             const decompressed = await decompress(response.body, ce);
@@ -112,14 +112,14 @@ export default {
           } else {
             data = await response.text();
           }
-          result = j('r', contentType, data, query,'');
+          result = j('r', contentType, data, query, '');
         }
 
         await z(u, result, cache);
         server.send(result);
-        console.log(JSON.parse(result));
+
       } catch (e) {
-        let errorMsg = j('er', contentType, `er: ${e}`, query,'');
+        let errorMsg = j('er', contentType, `er: ${e}`, query, '');
         console.log(JSON.parse(errorMsg));
       }
     });
@@ -140,12 +140,12 @@ async function z(u, x, o) {
       })
     );
   } catch (e) {
-    console.log({ er: `cache er: ${e}` }); 
+    console.log({ er: `cache er: ${e}` });
   }
 }
 
-function j(t, c, d, q, si){
-  return JSON.stringify({ t, c, d, q, si});
+function j(t, c, d, q, si) {
+  return JSON.stringify({ t, c, d, q, si });
 }
 
 async function decompress(body, encoding) {

@@ -27,11 +27,11 @@ export default {
         let dt = new Date();
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
-        let dd = dt.getUTCDate();/*
-        let mAu = btoa(`${y}${mn}${dt}`);*/ let mAu = '123456';
+        let dd = dt.getUTCDate();
+        let mAu = btoa(`${y}${mn}${dt}`);
         if (mAu !== au) {
           let msg = j('er', contentType, `er: auth error`, query, '');
-
+          server.send(msg);
           return;
         }
         query = q;
@@ -63,7 +63,8 @@ export default {
             'er',
             '',
             `Er: ${response.status} | ${response.statusText} | ${u}`,
-            query, ''
+            query,
+            ''
           );
           console.log(JSON.parse(errorMsg));
           server.send(errorMsg);
@@ -78,7 +79,8 @@ export default {
           result = j('r', 'n', data, q, '');
         } else if (
           contentType.startsWith('video') ||
-          contentType.startsWith('audio') || (contentType.startsWith('image') && si === 'true')
+          contentType.startsWith('audio') ||
+          (contentType.startsWith('image') && si === 'true')
         ) {
           server.send(j('s', contentType, '', q, ''));
           let reader = response.body.getReader();
@@ -100,11 +102,13 @@ export default {
           }
           server.send(j('e', contentType, '', q, ''));
           return;
-        } else if (contentType.startsWith('image') && si ==='false'){server.send(j('im',contentType,'',query,''));/*
-          data = `data:${contentType};base64,${Buffer.from(
-            await response.arrayBuffer()
-          ).toString('base64')}`;
-          result = j('r', contentType, data, query);*/ data = await response.arrayBuffer(); server.send(data); return;
+        } else if (contentType.startsWith('image') && si === 'false') {
+          server.send(j('im', contentType, '', query, ''));
+          // data = `data:${contentType};base64,${Buffer.from(await response.arrayBuffer()).toString('base64')}`;
+          // result = j('r', contentType, data, query);
+          data = await response.arrayBuffer();
+          server.send(data);
+          return;
         } else {
           if (ce === 'gzip' || ce === 'br') {
             const decompressed = await decompress(response.body, ce);
@@ -127,6 +131,8 @@ export default {
     return new Response(null, { status: 101, webSocket: client });
   }
 };
+
+function getGG() {}
 
 async function z(u, x, o) {
   try {

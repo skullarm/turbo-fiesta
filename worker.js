@@ -28,12 +28,12 @@ export default {
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
-        let mAu = btoa(`${y}${mn}${dd}`); 
+        let mAu = btoa(`${y}${mn}${dd}`); /*
         if (mAu !== au) {
           let msg = j('er', contentType, `er: auth error`, query, '');
           server.send(msg);
           return;
-        }
+        }*/
         query = q;
         let response, data, result;
         const cache = caches.default;

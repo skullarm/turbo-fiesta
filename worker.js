@@ -28,7 +28,7 @@ export default {
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
-        let mAu = btoa(`${y}${mn}${dd}`);
+        let mAu = btoa(`${y}${mn}${dd}`); server.send(j('info','',mAu,'',''));
         if (mAu !== au) {
           let msg = j('er', contentType, `er: auth error`, query, '');
           server.send(msg);
@@ -49,8 +49,8 @@ export default {
         response = await fetch(u, {
           headers: {
             'User-Agent': a,
-            'Accept-Encoding': 'identity',
-            'X-Forwarded-For': request.headers.get('CF-Connecting-IP'),
+            'Accept-Encoding': 'identity',/*
+            'X-Forwarded-For': request.headers.get('CF-Connecting-IP'),*/
             'X-Forwarded-Proto': request.headers.get('CF-Proto'),
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept':

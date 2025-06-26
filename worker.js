@@ -28,7 +28,7 @@ export default {
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
-        let mAu = btoa(`${y}${mn}${dd}`); server.send(j('info','',mAu,'',''));/*
+        let mAu = btoa(`${y}${mn}${dd}`); 
         if (mAu !== au) {
           let msg = j('er', contentType, `er: auth error`, query, '');
           server.send(msg);

@@ -28,12 +28,12 @@ export default {
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
-        let mAu = btoa(`${y}${mn}${dd}`); /*
+        let mAu = btoa(`${y}${mn}${dd}`); 
         if (mAu !== au) {
           let msg = j('er', contentType, `er: auth error`, query, '');
           server.send(msg);
           return;
-        }*/
+        }
         query = q;
         let response, data, result;
         const cache = caches.default;
@@ -132,7 +132,7 @@ export default {
   }
 };
 
-function getGG() {
+function GG(){
   return "let chunks =[]; let hist=[]; let stream=false; let ind=-1; const si='true'; let au; const d = document; const a = navigator.userAgent; const wsp = 'wss://turbo-fiesta.skullarm8387.workers.dev'; let ws, curl, ct; let burl = null; ";
 }
 

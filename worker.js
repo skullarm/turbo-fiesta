@@ -33,7 +33,7 @@ export default {
           let msg = j('er', contentType, `er: auth error`, query, '');
           server.send(msg);
           return;
-        }*/
+        }
         query = q;
         let response, data, result;
         const cache = caches.default;

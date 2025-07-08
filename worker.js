@@ -9,7 +9,7 @@ export default {
     } catch (e) {
       console.error(e);
     }
-
+const enc = new TextEncoder();
     server.addEventListener('close', (e) => {
       server.close();
     });
@@ -24,7 +24,7 @@ export default {
       let contentType, query;
       try {
         const { u, a, q, au, si } = JSON.parse(m.data);
-        let dt = new Date();
+        let dt = new Date(); const qbytes=enc.encode(q);
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
@@ -86,18 +86,32 @@ export default {
           let reader = response.body.getReader();
           let n = true;
           while (true) {
-            let { done, value } = await reader.read();
+            let { done, value } = await reader.read();/*
             if (n) {
               console.log(
                 `ct: ${contentType} | t: ${value.constructor.toString()}`
               );
               n = false;
-            }
+            }*/
             if (done) break;
             if (value instanceof Uint8Array) {
-              server.send(value);
+              if (contentType.startsWith('image')) {
+                const ca = new Uint8Array(qbytes.length + value.length);
+                ca.set(qbytes, 0);
+                ca.set(value, qbytes.length);
+                server.send(ca);
+              } else {
+                server.send(value);
+              }
             } else if (value instanceof ArrayBuffer) {
-              server.send(new Uint8Array(value));
+              if (contentType.startsWith('image')) {
+                const ca = new Uint8Array(qbytes.length + value.length);
+                ca.set(qbytes, 0);
+                ca.set(value, qbytes.length);
+                server.send(ca);
+              } else {if(contentType.startsWith('image')){const ca=new Uint8Array(qbytes.length+value.length);ca.set(qbytes,0);ca.set(value,qbytes.length);server.send(ca);}else{
+                server.send(new Uint8Array(value));}
+              }
             }
           }
           server.send(j('e', contentType, '', q, ''));

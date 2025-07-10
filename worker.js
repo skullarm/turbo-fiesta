@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 
 export default {
   async fetch(request) {
@@ -7,67 +6,98 @@ export default {
       [client, server] = Object.values(new WebSocketPair());
       server.accept();
     } catch (e) {
-      console.error(e);
+      return new Response('WebSocket error', { status: 500 });
     }
-const enc = new TextEncoder();
-    server.addEventListener('close', (e) => {
-      server.close();
+
+    const enc = new TextEncoder();
+
+    server.addEventListener('close', () => {
+      try { server.close(); } catch {}
     });
 
-    try { server.send(j('su','',GG(),'',''));
-      server.send(j('info', '', 'Welcome Golf Gangstas!!', '', ''));
+    // Send initial info
+    try {
+      server.send(jsonMsg('su', '', getGG(), '', ''));
+      server.send(jsonMsg('info', '', 'Welcome Golf Gangstas!!', '', ''));
     } catch (e) {
       console.error(e);
     }
 
     server.addEventListener('message', async (m) => {
-      let contentType, query;
+      let contentType, requestQ;
       try {
-        const { u, a, q, au, si } = JSON.parse(m.data);
-        let dt = new Date(); const qbytes=enc.encode(q);
+        const { u, a, q, au, si, method, body } = JSON.parse(m.data);
+        // Use q as the request string, not query
+        requestQ = q;
+        const qbytes = enc.encode(q);
+        const fetchMethod = method ? method.toUpperCase() : 'GET';
+        // Simple daily auth
+        let dt = new Date();
         let y = dt.getUTCFullYear();
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
-        let mAu = btoa(`${y}${mn}${dd}`); 
+        let mAu = btoa(`${y}${mn}${dd}`);
         if (mAu !== au) {
-          let msg = j('er', contentType, `er: auth error`, query, '');
+          let msg = jsonMsg('er', contentType, 'er: auth error', requestQ, '');
           server.send(msg);
           return;
         }
-        query = q;
-        let response, data, result;
+
         const cache = caches.default;
-        response = await cache.match(u);
+        let response = await cache.match(u);
+        let result, data;
 
         if (response) {
           result = await response.json();
-          result.q = q;
+          result.q = requestQ;
           server.send(JSON.stringify(result));
           return;
         }
 
-        response = await fetch(u, {
-          headers: {
-            'User-Agent': a,
-            'Accept-Encoding': 'identity',/*
-            'X-Forwarded-For': request.headers.get('CF-Connecting-IP'),*/
-            'X-Forwarded-Proto': request.headers.get('CF-Proto'),
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept':
-              'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
+
+        // Add fetch timeout to avoid long-running requests
+        const controller = new AbortController();
+        const fetchTimeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        try {
+          const fetchOptions = {
+            method: fetchMethod,
+            headers: {
+              'User-Agent': a || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Encoding': 'identity',
+              'X-Forwarded-Proto': request.headers.get('CF-Proto'),
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Referer': u,
+              'Origin': (new URL(u)).origin,
+              'Accept': 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
+            },
+            signal: controller.signal
+          };
+          if (["POST", "PUT", "PATCH"].includes(fetchMethod) && body) {
+            fetchOptions.body = body;
           }
-        });
+          response = await fetch(u, fetchOptions);
+        } catch (err) {
+          clearTimeout(fetchTimeout);
+          let errorMsg;
+          if (err.name === 'AbortError') {
+            errorMsg = jsonMsg('er', '', 'Fetch timeout (15s) exceeded', requestQ, '');
+          } else {
+            errorMsg = jsonMsg('er', '', `Fetch error: ${err}`, requestQ, '');
+          }
+          try { server.send(errorMsg); } catch {}
+          return;
+        }
+        clearTimeout(fetchTimeout);
 
         if (!response.ok) {
-          let errorMsg = j(
+          let errorMsg = jsonMsg(
             'er',
             '',
             `Er: ${response.status} | ${response.statusText} | ${u}`,
-            query,
+            requestQ,
             ''
           );
-          console.log(JSON.parse(errorMsg));
-          server.send(errorMsg);
+          try { server.send(errorMsg); } catch {}
           return;
         }
 
@@ -76,52 +106,25 @@ const enc = new TextEncoder();
 
         if (!contentType) {
           data = await response.text();
-          result = j('r', 'n', data, q, '');
+          result = jsonMsg('r', 'n', data, requestQ, '');
         } else if (
           contentType.startsWith('video') ||
           contentType.startsWith('audio') ||
           (contentType.startsWith('image') && si === 'true')
         ) {
-          server.send(j('s', contentType, '', q, ''));
+          server.send(jsonMsg('s', contentType, '', requestQ, ''));
           let reader = response.body.getReader();
-          let n = true;
           while (true) {
-            let { done, value } = await reader.read();/*
-            if (n) {
-              console.log(
-                `ct: ${contentType} | t: ${value.constructor.toString()}`
-              );
-              n = false;
-            }*/
+            let { done, value } = await reader.read();
             if (done) break;
-            if (value instanceof Uint8Array) {
-              if (contentType.startsWith('image')) {
-                const ca = new Uint8Array(qbytes.length + value.length);
-                ca.set(qbytes, 0);
-                ca.set(value, qbytes.length);
-                server.send(ca);
-              } else {
-                server.send(value);
-              }
-            } else if (value instanceof ArrayBuffer) {
-              if (contentType.startsWith('image')) {
-                const ca = new Uint8Array(qbytes.length + value.length);
-                ca.set(qbytes, 0);
-                ca.set(value, qbytes.length);
-                server.send(ca);
-              } else {if(contentType.startsWith('image')){const ca=new Uint8Array(qbytes.length+value.length);ca.set(qbytes,0);ca.set(value,qbytes.length);server.send(ca);}else{
-                server.send(new Uint8Array(value));}
-              }
-            }
+            sendBinaryChunk(server, value, contentType, qbytes);
           }
-          server.send(j('e', contentType, '', q, ''));
+          server.send(jsonMsg('e', contentType, '', requestQ, ''));
           return;
         } else if (contentType.startsWith('image') && si === 'false') {
-          server.send(j('im', contentType, '', query, ''));
-          // data = `data:${contentType};base64,${Buffer.from(await response.arrayBuffer()).toString('base64')}`;
-          // result = j('r', contentType, data, query);
+          server.send(jsonMsg('im', contentType, '', requestQ, ''));
           data = await response.arrayBuffer();
-          server.send(data);
+          server.send(new Uint8Array(data));
           return;
         } else {
           if (ce === 'gzip' || ce === 'br') {
@@ -130,15 +133,15 @@ const enc = new TextEncoder();
           } else {
             data = await response.text();
           }
-          result = j('r', contentType, data, query, '');
+          result = jsonMsg('r', contentType, data, requestQ, '');
         }
 
-        await z(u, result, cache);
+        await cachePut(u, result, cache);
         server.send(result);
 
       } catch (e) {
-        let errorMsg = j('er', contentType, `er: ${e}`, query, '');
-        console.log(JSON.parse(errorMsg));
+        let errorMsg = jsonMsg('er', contentType, `er: ${e}`, requestQ, '');
+        try { server.send(errorMsg); } catch {}
       }
     });
 
@@ -146,13 +149,41 @@ const enc = new TextEncoder();
   }
 };
 
-function GG(){
+function getGG() {
   return "let chunks =[]; let hist=[]; let stream=false; let ind=-1; const si='true'; let au; const d = document; const a = navigator.userAgent; const wsp = 'wss://turbo-fiesta.skullarm8387.workers.dev'; let ws, curl, ct; let burl = null; ";
 }
 
-async function z(u, x, o) {
+function jsonMsg(t, c, d, q, si) {
+  return JSON.stringify({ t, c, d, q, si });
+}
+
+function sendBinaryChunk(server, value, contentType, qbytes) {
+  if (!value) return;
+  if (value instanceof Uint8Array) {
+    if (contentType.startsWith('image')) {
+      const ca = new Uint8Array(qbytes.length + value.length);
+      ca.set(qbytes, 0);
+      ca.set(value, qbytes.length);
+      server.send(ca);
+    } else {
+      server.send(value);
+    }
+  } else if (value instanceof ArrayBuffer) {
+    const u8 = new Uint8Array(value);
+    if (contentType.startsWith('image')) {
+      const ca = new Uint8Array(qbytes.length + u8.length);
+      ca.set(qbytes, 0);
+      ca.set(u8, qbytes.length);
+      server.send(ca);
+    } else {
+      server.send(u8);
+    }
+  }
+}
+
+async function cachePut(u, x, cache) {
   try {
-    await o.put(
+    await cache.put(
       u,
       new Response(x, {
         headers: {
@@ -162,12 +193,8 @@ async function z(u, x, o) {
       })
     );
   } catch (e) {
-    console.log({ er: `cache er: ${e}` });
+    // Cache put error
   }
-}
-
-function j(t, c, d, q, si) {
-  return JSON.stringify({ t, c, d, q, si });
 }
 
 async function decompress(body, encoding) {

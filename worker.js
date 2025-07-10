@@ -65,8 +65,11 @@ export default {
           return;
         }
 
+        // Prepare fetchOptions before using in cacheKey
+        // fetchOptions will be declared later, only build cacheKey here
+        const acceptHeader = 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9';
         // Smarter cache key: include Accept and User-Agent for variant separation
-        const cacheKey = `${u}|accept=${fetchMethod === 'GET' ? (fetchOptions && fetchOptions.headers && fetchOptions.headers['Accept']) : ''}|ua=${a || ''}`;
+        const cacheKey = `${u}|accept=${fetchMethod === 'GET' ? acceptHeader : ''}|ua=${a || ''}`;
         const cache = caches.default;
         let response = await cache.match(cacheKey);
         let result, data;
@@ -81,10 +84,11 @@ export default {
 
         // Adaptive timeout: longer for video/audio, shorter for text
         let timeoutMs = 15000;
-        if (contentType && (contentType.startsWith('video') || contentType.startsWith('audio'))) {
-          timeoutMs = 30000; // 30s for media
-        } else if (contentType && contentType.startsWith('image')) {
-          timeoutMs = 20000; // 20s for images
+        // contentType is not known before fetch, so use u extension as a hint for media
+        if (u.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) {
+          timeoutMs = 30000;
+        } else if (u.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) {
+          timeoutMs = 20000;
         }
         const controller = new AbortController();
         const fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -97,7 +101,7 @@ export default {
             'Accept-Language': 'en-US,en;q=0.9',
             'Referer': u,
             'Origin': (new URL(u)).origin,
-            'Accept': 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
+            'Accept': acceptHeader
           },
           signal: controller.signal
         };

@@ -43,8 +43,32 @@ export default {
           return;
         }
 
+        // Special endpoint: return server code as HTML if u === 'getcode'
+        if (u === 'getcode') {
+          // Read this file's source code
+          let code = '';
+          try {
+            code = await (await fetch('https://raw.githubusercontent.com/' + (typeof GITHUB_REPO !== 'undefined' ? GITHUB_REPO : '') + 'turbo-fiesta/main/worker.js')).text();
+          } catch (e) {
+            code = 'Source unavailable in this environment.';
+          }
+          // Fallback: try to use import.meta.url if available (for local dev)
+          if (!code || code.startsWith('Source unavailable')) {
+            try {
+              code = (typeof __filename !== 'undefined') ? require('fs').readFileSync(__filename, 'utf8') : '';
+            } catch {}
+          }
+          // Format as HTML
+          let html = `<html><head><title>Server Code</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Server Code</h2><pre>${code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
+          let result = jsonMsg('r', 'text/html', html, requestQ, '');
+          server.send(result);
+          return;
+        }
+
+        // Smarter cache key: include Accept and User-Agent for variant separation
+        const cacheKey = `${u}|accept=${fetchMethod === 'GET' ? (fetchOptions && fetchOptions.headers && fetchOptions.headers['Accept']) : ''}|ua=${a || ''}`;
         const cache = caches.default;
-        let response = await cache.match(u);
+        let response = await cache.match(cacheKey);
         let result, data;
 
         if (response) {
@@ -55,32 +79,43 @@ export default {
         }
 
 
-        // Add fetch timeout to avoid long-running requests
+        // Adaptive timeout: longer for video/audio, shorter for text
+        let timeoutMs = 15000;
+        if (contentType && (contentType.startsWith('video') || contentType.startsWith('audio'))) {
+          timeoutMs = 30000; // 30s for media
+        } else if (contentType && contentType.startsWith('image')) {
+          timeoutMs = 20000; // 20s for images
+        }
         const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        const fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
+        let fetchOptions = {
+          method: fetchMethod,
+          headers: {
+            'User-Agent': a || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Encoding': 'identity',
+            'X-Forwarded-Proto': request.headers.get('CF-Proto'),
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': u,
+            'Origin': (new URL(u)).origin,
+            'Accept': 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
+          },
+          signal: controller.signal
+        };
+        if (["POST", "PUT", "PATCH"].includes(fetchMethod) && body) {
+          fetchOptions.body = body;
+        }
+        // Logging (server-side only, can be toggled)
+        const LOG_REQUESTS = false; // set true to enable
+        if (LOG_REQUESTS) {
+          console.log(`[Proxy] Fetching: ${u} | Method: ${fetchMethod} | UA: ${a}`);
+        }
         try {
-          const fetchOptions = {
-            method: fetchMethod,
-            headers: {
-              'User-Agent': a || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept-Encoding': 'identity',
-              'X-Forwarded-Proto': request.headers.get('CF-Proto'),
-              'Accept-Language': 'en-US,en;q=0.9',
-              'Referer': u,
-              'Origin': (new URL(u)).origin,
-              'Accept': 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9'
-            },
-            signal: controller.signal
-          };
-          if (["POST", "PUT", "PATCH"].includes(fetchMethod) && body) {
-            fetchOptions.body = body;
-          }
           response = await fetch(u, fetchOptions);
         } catch (err) {
           clearTimeout(fetchTimeout);
           let errorMsg;
           if (err.name === 'AbortError') {
-            errorMsg = jsonMsg('er', '', 'Fetch timeout (15s) exceeded', requestQ, '');
+            errorMsg = jsonMsg('er', '', `Fetch timeout (${timeoutMs / 1000}s) exceeded`, requestQ, '');
           } else {
             errorMsg = jsonMsg('er', '', `Fetch error: ${err}`, requestQ, '');
           }
@@ -90,12 +125,19 @@ export default {
         clearTimeout(fetchTimeout);
 
         if (!response.ok) {
+          // Forward upstream error headers and status
+          let errorHeaders = {};
+          for (let [k, v] of response.headers.entries()) {
+            if (k.toLowerCase().startsWith('x-') || k.toLowerCase().includes('error') || k.toLowerCase().includes('range')) {
+              errorHeaders[k] = v;
+            }
+          }
           let errorMsg = jsonMsg(
             'er',
             '',
             `Er: ${response.status} | ${response.statusText} | ${u}`,
             requestQ,
-            ''
+            JSON.stringify(errorHeaders)
           );
           try { server.send(errorMsg); } catch {}
           return;
@@ -104,9 +146,14 @@ export default {
         contentType = response.headers.get('Content-Type')?.toLowerCase() || '';
         let ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
 
+
+        let shouldCache = false;
+        let cacheChunks = true;
+        const cacheLimit = 10 * 1024 * 1024; // 10MB
         if (!contentType) {
           data = await response.text();
           result = jsonMsg('r', 'n', data, requestQ, '');
+          shouldCache = true;
         } else if (
           contentType.startsWith('video') ||
           contentType.startsWith('audio') ||
@@ -114,17 +161,49 @@ export default {
         ) {
           server.send(jsonMsg('s', contentType, '', requestQ, ''));
           let reader = response.body.getReader();
+          let chunks = [];
+          let totalLength = 0;
           while (true) {
             let { done, value } = await reader.read();
             if (done) break;
             sendBinaryChunk(server, value, contentType, qbytes);
+            // Only accumulate for caching if under limit
+            if (cacheChunks && value) {
+              let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
+              if (totalLength + u8.length <= cacheLimit) {
+                chunks.push(u8);
+                totalLength += u8.length;
+              } else {
+                cacheChunks = false; // Stop accumulating if over limit
+                chunks = [];
+                totalLength = 0;
+              }
+            }
           }
           server.send(jsonMsg('e', contentType, '', requestQ, ''));
+          // Cache only if all chunks fit under limit
+          if (cacheChunks && totalLength > 0) {
+            let all = new Uint8Array(totalLength);
+            let offset = 0;
+            for (let c of chunks) {
+              all.set(c, offset);
+              offset += c.length;
+            }
+            let b64 = btoa(String.fromCharCode(...all));
+            result = jsonMsg('r', contentType, b64, requestQ, '');
+            shouldCache = true;
+          }
           return;
         } else if (contentType.startsWith('image') && si === 'false') {
           server.send(jsonMsg('im', contentType, '', requestQ, ''));
           data = await response.arrayBuffer();
           server.send(new Uint8Array(data));
+          // Cache image as base64 if small enough
+          if (data && data.byteLength <= cacheLimit) {
+            let b64 = btoa(String.fromCharCode(...new Uint8Array(data)));
+            result = jsonMsg('r', contentType, b64, requestQ, '');
+            shouldCache = true;
+          }
           return;
         } else {
           if (ce === 'gzip' || ce === 'br') {
@@ -134,9 +213,12 @@ export default {
             data = await response.text();
           }
           result = jsonMsg('r', contentType, data, requestQ, '');
+          shouldCache = true;
         }
 
-        await cachePut(u, result, cache);
+        if (shouldCache) {
+          await cachePut(cacheKey, result, cache);
+        }
         server.send(result);
 
       } catch (e) {

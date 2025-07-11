@@ -11,13 +11,13 @@ export default {
 
     const enc = new TextEncoder();
 
-    server.addEventListener('close', () => {
-      try { server.close(); } catch {}
+    server.addEventListener('close', () => {/*
+      try { server.close(); } catch {}*/server.close();
     });
 
     // Send initial info
     try {
-      server.send(jsonMsg('su', '', getGG(), '', ''));
+      
       server.send(jsonMsg('info', '', 'Welcome Golf Gangstas!!', '', ''));
     } catch (e) {
       console.error(e);
@@ -170,7 +170,8 @@ export default {
           while (true) {
             let { done, value } = await reader.read();
             if (done) break;
-            sendBinaryChunk(server, value, contentType, qbytes);
+            // Only send binary chunk if value is Uint8Array or ArrayBuffer
+            if (value) sendBinaryChunk(server, value, contentType, qbytes);
             // Only accumulate for caching if under limit
             if (cacheChunks && value) {
               let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
@@ -193,7 +194,8 @@ export default {
               all.set(c, offset);
               offset += c.length;
             }
-            let b64 = btoa(String.fromCharCode(...all));
+            // Convert Uint8Array to base64 safely
+            let b64 = btoa(String.fromCharCode.apply(null, Array.from(all)));
             result = jsonMsg('r', contentType, b64, requestQ, '');
             shouldCache = true;
           }
@@ -201,10 +203,11 @@ export default {
         } else if (contentType.startsWith('image') && si === 'false') {
           server.send(jsonMsg('im', contentType, '', requestQ, ''));
           data = await response.arrayBuffer();
-          server.send(new Uint8Array(data));
+          // Only send binary if data is valid
+          if (data) server.send(new Uint8Array(data));
           // Cache image as base64 if small enough
           if (data && data.byteLength <= cacheLimit) {
-            let b64 = btoa(String.fromCharCode(...new Uint8Array(data)));
+            let b64 = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(data))));
             result = jsonMsg('r', contentType, b64, requestQ, '');
             shouldCache = true;
           }

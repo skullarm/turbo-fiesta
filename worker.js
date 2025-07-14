@@ -68,8 +68,17 @@ export default {
         // Prepare fetchOptions before using in cacheKey
         // fetchOptions will be declared later, only build cacheKey here
         const acceptHeader = 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9';
-        // Smarter cache key: include Accept and User-Agent for variant separation
-        const cacheKey = `${u}|accept=${fetchMethod === 'GET' ? acceptHeader : ''}|ua=${a || ''}`;
+        // Build a fully qualified cache key URL with variant info as query params
+        let cacheUrl;
+        try {
+          cacheUrl = new URL(u);
+        } catch {
+          // fallback: if u is not a valid URL, use a dummy base
+          cacheUrl = new URL(u, 'https://dummy.local');
+        }
+        cacheUrl.searchParams.set('accept', fetchMethod === 'GET' ? acceptHeader : '');
+        cacheUrl.searchParams.set('ua', a || '');
+        const cacheKey = cacheUrl.toString();
         const cache = caches.default;
         let response = await cache.match(cacheKey);
         let result, data;

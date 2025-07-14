@@ -1,4 +1,3 @@
-
 export default {
   async fetch(request) {
     let client, server;
@@ -179,16 +178,14 @@ export default {
           while (true) {
             let { done, value } = await reader.read();
             if (done) break;
-            // Only send binary chunk if value is Uint8Array or ArrayBuffer
             if (value) sendBinaryChunk(server, value, contentType, qbytes);
-            // Only accumulate for caching if under limit
             if (cacheChunks && value) {
               let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
               if (totalLength + u8.length <= cacheLimit) {
                 chunks.push(u8);
                 totalLength += u8.length;
               } else {
-                cacheChunks = false; // Stop accumulating if over limit
+                cacheChunks = false;
                 chunks = [];
                 totalLength = 0;
               }
@@ -203,8 +200,8 @@ export default {
               all.set(c, offset);
               offset += c.length;
             }
-            // Convert Uint8Array to base64 safely
-            let b64 = btoa(String.fromCharCode.apply(null, Array.from(all)));
+            // Use chunked base64 conversion to avoid stack overflow
+            let b64 = uint8ToBase64(all);
             result = jsonMsg('r', contentType, b64, requestQ, '');
             shouldCache = true;
           }
@@ -216,7 +213,7 @@ export default {
           if (data) server.send(new Uint8Array(data));
           // Cache image as base64 if small enough
           if (data && data.byteLength <= cacheLimit) {
-            let b64 = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(data))));
+            let b64 = uint8ToBase64(new Uint8Array(data));
             result = jsonMsg('r', contentType, b64, requestQ, '');
             shouldCache = true;
           }
@@ -316,4 +313,14 @@ async function decompress(body, encoding) {
     result += value;
   }
   return new Response(result);
+}
+
+// Helper: chunked base64 conversion for large Uint8Arrays
+function uint8ToBase64(u8) {
+  const CHUNK_SIZE = 0x8000; // 32KB
+  let result = '';
+  for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
+    result += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK_SIZE));
+  }
+  return btoa(result);
 }

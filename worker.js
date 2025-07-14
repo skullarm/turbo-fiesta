@@ -187,7 +187,7 @@ export default {
           (contentType.startsWith('image') && si === 'true')
         ) {
           // Refactored chunking/caching logic for media
-          await streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ);
+          await streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey);
           return;
         } else if (contentType.startsWith('image') && si === 'false') {
           server.send(jsonMsg('im', contentType, '', requestQ, ''));
@@ -310,7 +310,7 @@ function uint8ToBase64(u8) {
 }
 
 // Helper: stream media and cache if under limit
-async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ) {
+async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey) {
   server.send(jsonMsg('s', contentType, '', requestQ, ''));
   let reader = response.body.getReader();
   let chunks = [];

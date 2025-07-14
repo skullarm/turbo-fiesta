@@ -10,9 +10,19 @@ export default {
 
     const enc = new TextEncoder();
 
-    server.addEventListener('close', () => {/*
-      try { server.close(); } catch {}*/server.close();
+    // WebSocket keepalive: send ping every 30s
+    let pingInterval = setInterval(() => {
+      try { server.send(jsonMsg('ping', '', '', '', '')); } catch {}
+    }, 30000);
+    server.addEventListener('close', () => {
+      clearInterval(pingInterval);
+      server.close();
     });
+
+    // Optional: simple rate limiting per connection
+    let requestCount = 0;
+    const MAX_REQUESTS_PER_MIN = 120; // configurable
+    setInterval(() => { requestCount = 0; }, 60000);
 
     // Send initial info
     try {
@@ -23,6 +33,11 @@ export default {
     }
 
     server.addEventListener('message', async (m) => {
+      requestCount++;
+      if (requestCount > MAX_REQUESTS_PER_MIN) {
+        server.send(jsonMsg('er', '', 'Rate limit exceeded', '', ''));
+        return;
+      }
       let contentType, requestQ;
       try {
         const { u, a, q, au, si, method, body } = JSON.parse(m.data);
@@ -171,40 +186,8 @@ export default {
           contentType.startsWith('audio') ||
           (contentType.startsWith('image') && si === 'true')
         ) {
-          server.send(jsonMsg('s', contentType, '', requestQ, ''));
-          let reader = response.body.getReader();
-          let chunks = [];
-          let totalLength = 0;
-          while (true) {
-            let { done, value } = await reader.read();
-            if (done) break;
-            if (value) sendBinaryChunk(server, value, contentType, qbytes);
-            if (cacheChunks && value) {
-              let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
-              if (totalLength + u8.length <= cacheLimit) {
-                chunks.push(u8);
-                totalLength += u8.length;
-              } else {
-                cacheChunks = false;
-                chunks = [];
-                totalLength = 0;
-              }
-            }
-          }
-          server.send(jsonMsg('e', contentType, '', requestQ, ''));
-          // Cache only if all chunks fit under limit
-          if (cacheChunks && totalLength > 0) {
-            let all = new Uint8Array(totalLength);
-            let offset = 0;
-            for (let c of chunks) {
-              all.set(c, offset);
-              offset += c.length;
-            }
-            // Use chunked base64 conversion to avoid stack overflow
-            let b64 = uint8ToBase64(all);
-            result = jsonMsg('r', contentType, b64, requestQ, '');
-            shouldCache = true;
-          }
+          // Refactored chunking/caching logic for media
+          await streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ);
           return;
         } else if (contentType.startsWith('image') && si === 'false') {
           server.send(jsonMsg('im', contentType, '', requestQ, ''));
@@ -235,6 +218,7 @@ export default {
         server.send(result);
 
       } catch (e) {
+        console.error('Proxy error:', e); // improved error logging
         let errorMsg = jsonMsg('er', contentType, `er: ${e}`, requestQ, '');
         try { server.send(errorMsg); } catch {}
       }
@@ -323,4 +307,42 @@ function uint8ToBase64(u8) {
     result += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK_SIZE));
   }
   return btoa(result);
+}
+
+// Helper: stream media and cache if under limit
+async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ) {
+  server.send(jsonMsg('s', contentType, '', requestQ, ''));
+  let reader = response.body.getReader();
+  let chunks = [];
+  let totalLength = 0;
+  while (true) {
+    let { done, value } = await reader.read();
+    if (done) break;
+    if (value) sendBinaryChunk(server, value, contentType, qbytes);
+    if (cacheChunks && value) {
+      let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
+      if (totalLength + u8.length <= cacheLimit) {
+        chunks.push(u8);
+        totalLength += u8.length;
+      } else {
+        cacheChunks = false;
+        chunks = [];
+        totalLength = 0;
+      }
+    }
+  }
+  server.send(jsonMsg('e', contentType, '', requestQ, ''));
+  // Cache only if all chunks fit under limit
+  if (cacheChunks && totalLength > 0) {
+    let all = new Uint8Array(totalLength);
+    let offset = 0;
+    for (let c of chunks) {
+      all.set(c, offset);
+      offset += c.length;
+    }
+    let b64 = uint8ToBase64(all);
+    let result = jsonMsg('r', contentType, b64, requestQ, '');
+    await cachePut(cacheKey, result, caches.default);
+    server.send(result);
+  }
 }

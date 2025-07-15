@@ -42,23 +42,89 @@
 
     ws.onmessage = (event) => {
       let msg;
+      // Try to parse as JSON, else treat as binary
       try { msg = JSON.parse(event.data); } catch { msg = event.data; }
-      logMsg('Received: ' + JSON.stringify(msg));
       // Handle Set-Cookie messages
       if (msg.t === 'set-cookie' && msg.si) {
         const cookies = JSON.parse(msg.si);
         cookies.forEach(cookieStr => {
-          // Set cookie (only works for same-origin)
           document.cookie = cookieStr;
           logMsg('Set-Cookie: ' + cookieStr);
         });
         updateCookieDisplay();
+        return;
       }
       // Display HTML response in a new window
       if (msg.c === 'text/html' && msg.d) {
         const win = window.open('', '_blank');
         win.document.write(msg.d);
+        return;
       }
+      // Handle streamed audio/video using MediaSource for true streaming
+      if (msg.t === 's' && msg.c && (msg.c.startsWith('audio') || msg.c.startsWith('video'))) {
+        logMsg('Streaming ' + msg.c + '...');
+        let media, mimeType = msg.c;
+        if (msg.c.startsWith('audio')) {
+          media = document.createElement('audio');
+        } else {
+          media = document.createElement('video');
+          media.width = 480;
+        }
+        media.controls = true;
+        media.autoplay = true;
+        document.body.appendChild(media);
+        // MediaSource setup
+        const mediaSource = new MediaSource();
+        media.src = URL.createObjectURL(mediaSource);
+        window._mediaSource = mediaSource;
+        window._mediaElem = media;
+        window._mediaQueue = [];
+        window._mediaSourceBuffer = null;
+        window._mediaType = mimeType;
+        mediaSource.addEventListener('sourceopen', () => {
+          try {
+            window._mediaSourceBuffer = mediaSource.addSourceBuffer(mimeType);
+            // Append any queued chunks
+            window._mediaQueue.forEach(chunk => {
+              window._mediaSourceBuffer.appendBuffer(chunk);
+            });
+            window._mediaQueue = [];
+          } catch (e) {
+            logMsg('MediaSource error: ' + e);
+          }
+        });
+        return;
+      }
+      // Receive binary chunk (ArrayBuffer)
+      if (typeof event.data !== 'string' && window._mediaSource && window._mediaType) {
+        let chunk = new Uint8Array(event.data);
+        if (window._mediaSource.readyState === 'open' && window._mediaSourceBuffer) {
+          try {
+            window._mediaSourceBuffer.appendBuffer(chunk);
+          } catch (e) {
+            logMsg('SourceBuffer error: ' + e);
+          }
+        } else {
+          window._mediaQueue.push(chunk);
+        }
+        return;
+      }
+      // End of stream, signal MediaSource end
+      if (msg.t === 'e' && window._mediaSource && window._mediaSource.readyState === 'open') {
+        try {
+          window._mediaSource.endOfStream();
+          logMsg('Media stream complete.');
+        } catch (e) {
+          logMsg('MediaSource endOfStream error: ' + e);
+        }
+        window._mediaSource = null;
+        window._mediaElem = null;
+        window._mediaType = null;
+        window._mediaSourceBuffer = null;
+        window._mediaQueue = null;
+        return;
+      }
+      logMsg('Received: ' + JSON.stringify(msg));
     };
 
     function sendRequest() {
@@ -66,6 +132,9 @@
       const method = document.getElementById('method').value;
       const body = document.getElementById('body').value;
       const cookie = document.cookie;
+      // If requesting audio/video, set si=true for streaming
+      let si = 'false';
+      if (url.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) si = 'true';
       const req = {
         u: url,
         a: navigator.userAgent,
@@ -73,7 +142,8 @@
         au: btoa(new Date().getUTCFullYear() + '' + new Date().getUTCMonth() + '' + new Date().getUTCDate()),
         method: method,
         body: body || null,
-        cookie: cookie // Send current cookies
+        cookie: cookie,
+        si: si
       };
       ws.send(JSON.stringify(req));
       logMsg('Sent: ' + JSON.stringify(req));

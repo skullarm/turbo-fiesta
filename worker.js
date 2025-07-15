@@ -19,10 +19,6 @@ export default {
       server.close();
     });
 
-    // Optional: simple rate limiting per connection
-    let requestCount = 0;
-    const MAX_REQUESTS_PER_MIN = 120; // configurable
-    setInterval(() => { requestCount = 0; }, 60000);
 
     // Send initial info
     try {
@@ -33,11 +29,7 @@ export default {
     }
 
     server.addEventListener('message', async (m) => {
-      requestCount++;
-      if (requestCount > MAX_REQUESTS_PER_MIN) {
-        server.send(jsonMsg('er', '', 'Rate limit exceeded', '', ''));
-        return;
-      }
+      // Rate limiting removed
       let contentType, requestQ;
       try {
         const { u, a, q, au, si, method, body } = JSON.parse(m.data);

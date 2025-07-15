@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced WebSocket Proxy Client Demo</title>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #eee; }
+    #log { background: #111; padding: 1em; height: 300px; overflow: auto; }
+    input, button, select { margin: 0.5em; }
+    .cookie-list { font-size: 0.9em; color: #ccc; }
+  </style>
+</head>
+<body>
+  <h2>Advanced WebSocket Proxy Client Demo</h2>
+  <label>URL: <input id="url" type="text" value="https://example.com" size="40"></label>
+  <label>Method:
+    <select id="method">
+      <option>GET</option>
+      <option>POST</option>
+      <option>PUT</option>
+      <option>PATCH</option>
+    </select>
+  </label>
+  <label>Body: <input id="body" type="text" size="40"></label>
+  <button onclick="sendRequest()">Send Request</button>
+  <button onclick="clearLog()">Clear Log</button>
+  <div class="cookie-list">Current Cookies: <span id="cookieDisplay"></span></div>
+  <div id="log"></div>
+  <script>
+    const ws = new WebSocket('wss://turbo-fiesta.skullarm8387.workers.dev');
+    const log = document.getElementById('log');
+    const cookieDisplay = document.getElementById('cookieDisplay');
+
+    function updateCookieDisplay() {
+      cookieDisplay.textContent = document.cookie;
+    }
+    updateCookieDisplay();
+
+    ws.onopen = () => logMsg('WebSocket connected');
+    ws.onclose = () => logMsg('WebSocket closed');
+    ws.onerror = e => logMsg('WebSocket error: ' + e);
+
+    ws.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { msg = event.data; }
+      logMsg('Received: ' + JSON.stringify(msg));
+      // Handle Set-Cookie messages
+      if (msg.t === 'set-cookie' && msg.si) {
+        const cookies = JSON.parse(msg.si);
+        cookies.forEach(cookieStr => {
+          // Set cookie (only works for same-origin)
+          document.cookie = cookieStr;
+          logMsg('Set-Cookie: ' + cookieStr);
+        });
+        updateCookieDisplay();
+      }
+      // Display HTML response in a new window
+      if (msg.c === 'text/html' && msg.d) {
+        const win = window.open('', '_blank');
+        win.document.write(msg.d);
+      }
+    };
+
+    function sendRequest() {
+      const url = document.getElementById('url').value;
+      const method = document.getElementById('method').value;
+      const body = document.getElementById('body').value;
+      const cookie = document.cookie;
+      const req = {
+        u: url,
+        a: navigator.userAgent,
+        q: url,
+        au: btoa(new Date().getUTCFullYear() + '' + new Date().getUTCMonth() + '' + new Date().getUTCDate()),
+        method: method,
+        body: body || null,
+        cookie: cookie // Send current cookies
+      };
+      ws.send(JSON.stringify(req));
+      logMsg('Sent: ' + JSON.stringify(req));
+    }
+
+    function logMsg(msg) {
+      log.innerHTML += msg + '<br>';
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function clearLog() {
+      log.innerHTML = '';
+    }
+  </script>
+</body>
+</html>

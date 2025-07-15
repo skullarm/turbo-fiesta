@@ -50,19 +50,27 @@ export default {
         }
 
         // Special endpoint: return server code as HTML if u === 'getcode'
+        // Special endpoint: return client demo code as HTML if u === 'getcodeclient'
+        if (u === 'getcodeclient') {
+          let clientCode = '';
+          try {
+            clientCode = await (await fetch('https://raw.githubusercontent.com/skullarm/turbo-fiesta/main/ws-client-demo.html')).text();
+          } catch (e) {
+            clientCode = 'Sample client unavailable. (Could not fetch from GitHub)';
+          }
+          // Format as HTML (show as raw HTML for easy copy/view)
+          let html = `<html><head><title>Sample Client</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Sample Client (ws-client-demo.html)</h2><pre>${clientCode.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
+          let result = jsonMsg('r', 'text/html', html, requestQ, '');
+          server.send(result);
+          return;
+        }
         if (u === 'getcode') {
-          // Read this file's source code
+          // Fetch this file's source code from GitHub (public repo)
           let code = '';
           try {
-            code = await (await fetch('https://raw.githubusercontent.com/' + (typeof GITHUB_REPO !== 'undefined' ? GITHUB_REPO : '') + 'turbo-fiesta/main/worker.js')).text();
+            code = await (await fetch('https://raw.githubusercontent.com/skullarm/turbo-fiesta/main/worker.js')).text();
           } catch (e) {
-            code = 'Source unavailable in this environment.';
-          }
-          // Fallback: try to use import.meta.url if available (for local dev)
-          if (!code || code.startsWith('Source unavailable')) {
-            try {
-              code = (typeof __filename !== 'undefined') ? require('fs').readFileSync(__filename, 'utf8') : '';
-            } catch {}
+            code = 'Source unavailable. (Could not fetch from GitHub)';
           }
           // Format as HTML
           let html = `<html><head><title>Server Code</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Server Code</h2><pre>${code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
@@ -118,7 +126,8 @@ export default {
             'Origin': (new URL(u)).origin,
             'Accept': acceptHeader
           },
-          signal: controller.signal
+          signal: controller.signal,
+          redirect: 'manual' // handle redirects manually to avoid subrequest chains
         };
         if (["POST", "PUT", "PATCH"].includes(fetchMethod) && body) {
           fetchOptions.body = body;
@@ -128,18 +137,55 @@ export default {
         if (LOG_REQUESTS) {
           console.log(`[Proxy] Fetching: ${u} | Method: ${fetchMethod} | UA: ${a}`);
         }
-        try {
-          response = await fetch(u, fetchOptions);
-        } catch (err) {
-          clearTimeout(fetchTimeout);
-          let errorMsg;
-          if (err.name === 'AbortError') {
-            errorMsg = jsonMsg('er', '', `Fetch timeout (${timeoutMs / 1000}s) exceeded`, requestQ, '');
-          } else {
-            errorMsg = jsonMsg('er', '', `Fetch error: ${err}`, requestQ, '');
+        let maxRedirects = 5;
+        let redirectCount = 0;
+        let finalUrl = u;
+        let visitedUrls = new Set();
+        while (true) {
+          // Stricter timeout for each redirect
+          const redirectController = new AbortController();
+          const redirectTimeoutMs = Math.max(5000, timeoutMs - redirectCount * 2000); // reduce timeout per redirect
+          const redirectTimeout = setTimeout(() => redirectController.abort(), redirectTimeoutMs);
+          let redirectFetchOptions = { ...fetchOptions, signal: redirectController.signal };
+          try {
+            response = await fetch(finalUrl, redirectFetchOptions);
+          } catch (err) {
+            clearTimeout(redirectTimeout);
+            let errorMsg;
+            if (err.name === 'AbortError') {
+              errorMsg = jsonMsg('er', '', `Fetch timeout (${redirectTimeoutMs / 1000}s) exceeded`, requestQ, '');
+            } else {
+              errorMsg = jsonMsg('er', '', `Fetch error: ${err}`, requestQ, '');
+            }
+            try { server.send(errorMsg); } catch {}
+            return;
           }
-          try { server.send(errorMsg); } catch {}
-          return;
+          clearTimeout(redirectTimeout);
+          // Logging for each redirect
+          if (LOG_REQUESTS && response.status >= 300 && response.status < 400 && response.headers.has('Location')) {
+            console.log(`[Proxy] Redirect ${redirectCount + 1}: ${finalUrl} -> ${response.headers.get('Location')}`);
+          }
+          // Block redirect loops
+          if (visitedUrls.has(finalUrl)) {
+            let errorMsg = jsonMsg('er', '', `Redirect loop detected at ${finalUrl}`, requestQ, '');
+            try { server.send(errorMsg); } catch {}
+            return;
+          }
+          visitedUrls.add(finalUrl);
+          // Handle manual redirect (3xx status)
+          if (response.status >= 300 && response.status < 400 && response.headers.has('Location') && redirectCount < maxRedirects) {
+            let nextUrl = response.headers.get('Location');
+            // Block redirect to same URL
+            if (nextUrl === finalUrl) {
+              let errorMsg = jsonMsg('er', '', `Redirect to same URL detected at ${finalUrl}`, requestQ, '');
+              try { server.send(errorMsg); } catch {}
+              return;
+            }
+            finalUrl = nextUrl;
+            redirectCount++;
+            continue;
+          }
+          break;
         }
         clearTimeout(fetchTimeout);
 

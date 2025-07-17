@@ -33,6 +33,9 @@ export default {
       let contentType, requestQ;
       try {
         const { u, a, q, au, si, method, body } = JSON.parse(m.data);
+        // Support offset for media resume
+        let offset = 0;
+        try { offset = JSON.parse(m.data).offset || 0; } catch {}
         // Use q as the request string, not query
         requestQ = q;
         const qbytes = enc.encode(q);
@@ -129,6 +132,10 @@ export default {
           signal: controller.signal,
           redirect: 'manual' // handle redirects manually to avoid subrequest chains
         };
+        // If resuming media, add Range header
+        if (offset > 0 && u.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) {
+          fetchOptions.headers['Range'] = `bytes=${offset}-`;
+        }
         if (["POST", "PUT", "PATCH"].includes(fetchMethod) && body) {
           fetchOptions.body = body;
         }
@@ -273,25 +280,15 @@ function jsonMsg(t, c, d, q, si) {
 
 function sendBinaryChunk(server, value, contentType, qbytes) {
   if (!value) return;
-  if (value instanceof Uint8Array) {
-    if (contentType.startsWith('image')) {
-      const ca = new Uint8Array(qbytes.length + value.length);
-      ca.set(qbytes, 0);
-      ca.set(value, qbytes.length);
-      server.send(ca);
-    } else {
-      server.send(value);
-    }
-  } else if (value instanceof ArrayBuffer) {
-    const u8 = new Uint8Array(value);
-    if (contentType.startsWith('image')) {
-      const ca = new Uint8Array(qbytes.length + u8.length);
-      ca.set(qbytes, 0);
-      ca.set(u8, qbytes.length);
-      server.send(ca);
-    } else {
-      server.send(u8);
-    }
+  let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
+  // Always prepend qbytes for image/audio/video
+  if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video')) {
+    const ca = new Uint8Array(qbytes.length + u8.length);
+    ca.set(qbytes, 0);
+    ca.set(u8, qbytes.length);
+    server.send(ca);
+  } else {
+    server.send(u8);
   }
 }
 

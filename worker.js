@@ -266,9 +266,6 @@ export default {
   }
 };
 
-function getGG() {
-  return "let chunks =[]; let hist=[]; let stream=false; let ind=-1; const si='true'; let au; const d = document; const a = navigator.userAgent; const wsp = 'wss://turbo-fiesta.skullarm8387.workers.dev'; let ws, curl, ct; let burl = null; ";
-}
 
 function jsonMsg(t, c, d, q, si) {
   return JSON.stringify({ t, c, d, q, si });

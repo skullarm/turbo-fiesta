@@ -1,162 +1,244 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Advanced WebSocket Proxy Client Demo</title>
+  <title>Turbo-Fiesta Streaming Client</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; background: #222; color: #eee; }
-    #log { background: #111; padding: 1em; height: 300px; overflow: auto; }
-    input, button, select { margin: 0.5em; }
-    .cookie-list { font-size: 0.9em; color: #ccc; }
+    body { font-family: system-ui, sans-serif; background: #181c20; color: #e0e6ed; margin: 0; }
+    header { background: #23272e; padding: 1em 2em; }
+    h1 { margin: 0; font-size: 1.5em; }
+    main { max-width: 700px; margin: 2em auto; background: #23272e; border-radius: 8px; box-shadow: 0 2px 8px #0008; padding: 2em; }
+    label, input, select, button { font-size: 1em; }
+    label { display: block; margin: 1em 0 0.2em 0; }
+    input, select { width: 100%; max-width: 500px; padding: 0.4em; border-radius: 4px; border: 1px solid #444; background: #181c20; color: #e0e6ed; }
+    button { margin: 1em 0.5em 0 0; padding: 0.5em 1.2em; border-radius: 4px; border: none; background: #3b82f6; color: #fff; cursor: pointer; transition: background 0.2s; }
+    button:disabled { background: #444; cursor: not-allowed; }
+    .status { margin: 1em 0; font-size: 1em; }
+    .cookie-list { font-size: 0.9em; color: #b5bac1; margin-bottom: 1em; }
+    #log { background: #181c20; border: 1px solid #333; border-radius: 4px; padding: 1em; height: 180px; overflow: auto; font-size: 0.97em; margin-bottom: 1em; }
+    .media-wrap { margin: 1.5em 0; }
+    audio, video { width: 100%; max-width: 600px; display: none; margin: 0.5em 0; background: #000; border-radius: 4px; }
+    .stream-info { font-size: 0.95em; color: #b5bac1; margin-bottom: 0.5em; }
   </style>
 </head>
 <body>
-  <h2>Advanced WebSocket Proxy Client Demo</h2>
-  <label>URL: <input id="url" type="text" value="https://example.com" size="40"></label>
-  <label>Method:
-    <select id="method">
-      <option>GET</option>
-      <option>POST</option>
-      <option>PUT</option>
-      <option>PATCH</option>
-    </select>
-  </label>
-  <label>Body: <input id="body" type="text" size="40"></label>
-  <button onclick="sendRequest()">Send Request</button>
-  <button onclick="clearLog()">Clear Log</button>
-  <div class="cookie-list">Current Cookies: <span id="cookieDisplay"></span></div>
-  <div id="log"></div>
+  <header>
+    <h1>Turbo-Fiesta Streaming Client</h1>
+  </header>
+  <main>
+    <form id="requestForm" onsubmit="event.preventDefault(); client.sendRequest();">
+      <label for="url">Resource URL</label>
+      <input id="url" type="text" value="https://www.w3schools.com/html/mov_bbb.mp4" autocomplete="url" required>
+      <label for="method">HTTP Method</label>
+      <select id="method">
+        <option>GET</option>
+        <option>POST</option>
+        <option>PUT</option>
+        <option>PATCH</option>
+      </select>
+      <label for="body">Request Body (optional)</label>
+      <input id="body" type="text" autocomplete="off">
+      <button type="submit">Send Request</button>
+      <button type="button" onclick="client.clearLog()">Clear Log</button>
+      <button type="button" onclick="client.reconnectStream()">Reconnect Stream</button>
+    </form>
+    <div class="cookie-list">Current Cookies: <span id="cookieDisplay"></span></div>
+    <div class="status" id="wsStatus">Connecting...</div>
+    <div class="stream-info">Stream Offset: <span id="streamOffset">0</span> bytes</div>
+    <div id="log"></div>
+    <div class="media-wrap">
+      <audio id="audioPlayer" controls></audio>
+      <video id="videoPlayer" controls></video>
+    </div>
+  </main>
   <script>
-    const ws = new WebSocket('wss://turbo-fiesta.skullarm8387.workers.dev');
-    const log = document.getElementById('log');
-    const cookieDisplay = document.getElementById('cookieDisplay');
-
-    function updateCookieDisplay() {
-      cookieDisplay.textContent = document.cookie;
-    }
-    updateCookieDisplay();
-
-    ws.onopen = () => logMsg('WebSocket connected');
-    ws.onclose = () => logMsg('WebSocket closed');
-    ws.onerror = e => logMsg('WebSocket error: ' + e);
-
-    ws.onmessage = (event) => {
-      let msg;
-      // Try to parse as JSON, else treat as binary
-      try { msg = JSON.parse(event.data); } catch { msg = event.data; }
-      // Handle Set-Cookie messages
-      if (msg.t === 'set-cookie' && msg.si) {
-        const cookies = JSON.parse(msg.si);
-        cookies.forEach(cookieStr => {
-          document.cookie = cookieStr;
-          logMsg('Set-Cookie: ' + cookieStr);
-        });
-        updateCookieDisplay();
-        return;
+    class TurboFiestaClient {
+      constructor() {
+        this.ws = null;
+        this.url = 'wss://turbo-fiesta.skullarm8387.workers.dev';
+        this.logElem = document.getElementById('log');
+        this.cookieDisplay = document.getElementById('cookieDisplay');
+        this.wsStatus = document.getElementById('wsStatus');
+        this.audioElem = document.getElementById('audioPlayer');
+        this.videoElem = document.getElementById('videoPlayer');
+        this.streamOffsetElem = document.getElementById('streamOffset');
+        this.lastRequest = null;
+        this.streamOffset = 0;
+        this.mediaSource = null;
+        this.mediaSourceBuffer = null;
+        this.mediaQueue = [];
+        this.mediaType = null;
+        this.mediaElem = null;
+        this._setupUI();
+        this._connect();
       }
-      // Display HTML response in a new window
-      if (msg.c === 'text/html' && msg.d) {
-        const win = window.open('', '_blank');
-        win.document.write(msg.d);
-        return;
+
+      _setupUI() {
+        this.audioElem.style.display = 'none';
+        this.videoElem.style.display = 'none';
+        this.updateCookieDisplay();
       }
-      // Handle streamed audio/video using MediaSource for true streaming
-      if (msg.t === 's' && msg.c && (msg.c.startsWith('audio') || msg.c.startsWith('video'))) {
-        logMsg('Streaming ' + msg.c + '...');
-        let media, mimeType = msg.c;
-        if (msg.c.startsWith('audio')) {
-          media = document.createElement('audio');
-        } else {
-          media = document.createElement('video');
-          media.width = 480;
+
+      _connect() {
+        if (this.ws) {
+          this.ws.close();
         }
-        media.controls = true;
-        media.autoplay = true;
-        document.body.appendChild(media);
-        // MediaSource setup
-        const mediaSource = new MediaSource();
-        media.src = URL.createObjectURL(mediaSource);
-        window._mediaSource = mediaSource;
-        window._mediaElem = media;
-        window._mediaQueue = [];
-        window._mediaSourceBuffer = null;
-        window._mediaType = mimeType;
-        mediaSource.addEventListener('sourceopen', () => {
-          try {
-            window._mediaSourceBuffer = mediaSource.addSourceBuffer(mimeType);
-            // Append any queued chunks
-            window._mediaQueue.forEach(chunk => {
-              window._mediaSourceBuffer.appendBuffer(chunk);
-            });
-            window._mediaQueue = [];
-          } catch (e) {
-            logMsg('MediaSource error: ' + e);
+        this.ws = new WebSocket(this.url);
+        this.ws.binaryType = 'arraybuffer';
+        this.ws.onopen = () => {
+          this.wsStatus.textContent = 'WebSocket connected';
+          this._log('WebSocket connected');
+        };
+        this.ws.onclose = () => {
+          this.wsStatus.textContent = 'WebSocket closed';
+          this._log('WebSocket closed');
+        };
+        this.ws.onerror = e => {
+          this.wsStatus.textContent = 'WebSocket error';
+          this._log('WebSocket error: ' + (e && e.message ? e.message : e));
+        };
+        this.ws.onmessage = (event) => this._handleMessage(event);
+      }
+
+      updateCookieDisplay() {
+        this.cookieDisplay.textContent = document.cookie;
+      }
+
+      _log(msg) {
+        this.logElem.innerHTML += msg + '<br>';
+        this.logElem.scrollTop = this.logElem.scrollHeight;
+      }
+
+      clearLog() {
+        this.logElem.innerHTML = '';
+      }
+
+      sendRequest(offset = 0) {
+        const url = document.getElementById('url').value;
+        const method = document.getElementById('method').value;
+        const body = document.getElementById('body').value;
+        const cookie = document.cookie;
+        let si = 'false';
+        if (url.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) si = 'true';
+        this.lastRequest = { url, method, body, si };
+        const req = {
+          u: url,
+          a: navigator.userAgent,
+          q: url,
+          au: btoa(new Date().getUTCFullYear() + '' + new Date().getUTCMonth() + '' + new Date().getUTCDate()),
+          method: method,
+          body: body || null,
+          cookie: cookie,
+          si: si,
+          offset: offset
+        };
+        if (this.ws.readyState !== 1) {
+          this._log('WebSocket not open, reconnecting...');
+          this._connect();
+          setTimeout(() => this.sendRequest(offset), 500);
+          return;
+        }
+        this._log('Sent: ' + JSON.stringify(req));
+        this.ws.send(JSON.stringify(req));
+      }
+
+      reconnectStream() {
+        if (!this.lastRequest) {
+          this._log('No previous stream to reconnect.');
+          return;
+        }
+        this._log('Reconnecting stream from offset ' + this.streamOffset + '...');
+        this.sendRequest(this.streamOffset);
+      }
+
+      _handleMessage(event) {
+        // Binary chunk
+        if (typeof event.data !== 'string' && this.mediaSource && this.mediaType) {
+          let chunk = new Uint8Array(event.data);
+          this.streamOffset += chunk.length;
+          this.streamOffsetElem.textContent = this.streamOffset;
+          if (this.mediaSource.readyState === 'open' && this.mediaSourceBuffer) {
+            try {
+              this.mediaSourceBuffer.appendBuffer(chunk);
+            } catch (e) {
+              this._log('SourceBuffer error: ' + e);
+            }
+          } else {
+            this.mediaQueue.push(chunk);
           }
-        });
-        return;
-      }
-      // Receive binary chunk (ArrayBuffer)
-      if (typeof event.data !== 'string' && window._mediaSource && window._mediaType) {
-        let chunk = new Uint8Array(event.data);
-        if (window._mediaSource.readyState === 'open' && window._mediaSourceBuffer) {
+          return;
+        }
+        let msg;
+        try { msg = JSON.parse(event.data); } catch { msg = event.data; }
+        // Set-Cookie
+        if (msg.t === 'set-cookie' && msg.si) {
+          const cookies = JSON.parse(msg.si);
+          cookies.forEach(cookieStr => {
+            document.cookie = cookieStr;
+            this._log('Set-Cookie: ' + cookieStr);
+          });
+          this.updateCookieDisplay();
+          return;
+        }
+        // HTML response
+        if (msg.c === 'text/html' && msg.d) {
+          const win = window.open('', '_blank');
+          win.document.write(msg.d);
+          return;
+        }
+        // Streaming start
+        if (msg.t === 's' && msg.c && (msg.c.startsWith('audio') || msg.c.startsWith('video'))) {
+          this._log('Streaming ' + msg.c + '...');
+          this.streamOffset = 0;
+          this.streamOffsetElem.textContent = this.streamOffset;
+          this.audioElem.style.display = msg.c.startsWith('audio') ? '' : 'none';
+          this.videoElem.style.display = msg.c.startsWith('video') ? '' : 'none';
+          this.mediaElem = msg.c.startsWith('audio') ? this.audioElem : this.videoElem;
+          this.mediaElem.src = '';
+          this.mediaElem.load();
+          this.mediaElem.autoplay = true;
+          this.mediaSource = new MediaSource();
+          this.mediaQueue = [];
+          this.mediaSourceBuffer = null;
+          this.mediaType = msg.c;
+          this.mediaElem.src = URL.createObjectURL(this.mediaSource);
+          this.mediaSource.addEventListener('sourceopen', () => {
+            try {
+              this.mediaSourceBuffer = this.mediaSource.addSourceBuffer(msg.c);
+              this.mediaQueue.forEach(chunk => {
+                this.mediaSourceBuffer.appendBuffer(chunk);
+              });
+              this.mediaQueue = [];
+            } catch (e) {
+              this._log('MediaSource error: ' + e);
+            }
+          });
+          return;
+        }
+        // End of stream
+        if (msg.t === 'e' && this.mediaSource && this.mediaSource.readyState === 'open') {
           try {
-            window._mediaSourceBuffer.appendBuffer(chunk);
+            this.mediaSource.endOfStream();
+            this._log('Media stream complete.');
           } catch (e) {
-            logMsg('SourceBuffer error: ' + e);
+            this._log('MediaSource endOfStream error: ' + e);
           }
-        } else {
-          window._mediaQueue.push(chunk);
+          this.mediaSource = null;
+          this.mediaElem = null;
+          this.mediaType = null;
+          this.mediaSourceBuffer = null;
+          this.mediaQueue = null;
+          return;
         }
-        return;
+        this._log('Received: ' + JSON.stringify(msg));
       }
-      // End of stream, signal MediaSource end
-      if (msg.t === 'e' && window._mediaSource && window._mediaSource.readyState === 'open') {
-        try {
-          window._mediaSource.endOfStream();
-          logMsg('Media stream complete.');
-        } catch (e) {
-          logMsg('MediaSource endOfStream error: ' + e);
-        }
-        window._mediaSource = null;
-        window._mediaElem = null;
-        window._mediaType = null;
-        window._mediaSourceBuffer = null;
-        window._mediaQueue = null;
-        return;
-      }
-      logMsg('Received: ' + JSON.stringify(msg));
-    };
-
-    function sendRequest() {
-      const url = document.getElementById('url').value;
-      const method = document.getElementById('method').value;
-      const body = document.getElementById('body').value;
-      const cookie = document.cookie;
-      // If requesting audio/video, set si=true for streaming
-      let si = 'false';
-      if (url.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) si = 'true';
-      const req = {
-        u: url,
-        a: navigator.userAgent,
-        q: url,
-        au: btoa(new Date().getUTCFullYear() + '' + new Date().getUTCMonth() + '' + new Date().getUTCDate()),
-        method: method,
-        body: body || null,
-        cookie: cookie,
-        si: si
-      };
-      ws.send(JSON.stringify(req));
-      logMsg('Sent: ' + JSON.stringify(req));
     }
 
-    function logMsg(msg) {
-      log.innerHTML += msg + '<br>';
-      log.scrollTop = log.scrollHeight;
-    }
-
-    function clearLog() {
-      log.innerHTML = '';
-    }
+    // Instantiate client
+    const client = new TurboFiestaClient();
+    window.client = client;
   </script>
 </body>
 </html>

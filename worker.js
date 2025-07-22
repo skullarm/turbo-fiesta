@@ -216,12 +216,13 @@ export default {
         }
 
         contentType = response.headers.get('Content-Type')?.toLowerCase() || '';
-        let ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
 
+        let ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
 
         let shouldCache = false;
         let cacheChunks = true;
         const cacheLimit = 10 * 1024 * 1024; // 10MB
+        const PARTIAL_LIMIT = 10 * 1024 * 1024; // 10MB
         if (!contentType) {
           data = await response.text();
           result = jsonMsg('r', 'n', data, requestQ, '');
@@ -231,9 +232,28 @@ export default {
           contentType.startsWith('audio') ||
           (contentType.startsWith('image') && si === 'true')
         ) {
-          // Refactored chunking/caching logic for media
-          await streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey);
-          return;
+          // Get content-length from response headers if available
+          let contentLength = response.headers.get('content-length') || '';
+          let rangeUsed = '';
+          let partial = false;
+          let numericLength = parseInt(contentLength, 10);
+          // If content-length is above PARTIAL_LIMIT, fetch only the first PARTIAL_LIMIT bytes
+          if (numericLength && numericLength > PARTIAL_LIMIT && !request.headers.get('Range')) {
+            // Abort current response, start a new fetch with Range header
+            try { response.body.cancel && response.body.cancel(); } catch {}
+            let rangeHeader = `bytes=0-${PARTIAL_LIMIT-1}`;
+            let partialFetchOptions = { ...fetchOptions };
+            partialFetchOptions.headers = { ...fetchOptions.headers, Range: rangeHeader };
+            let partialResp = await fetch(finalUrl, partialFetchOptions);
+            let partialContentLength = partialResp.headers.get('content-length') || '';
+            rangeUsed = rangeHeader;
+            partial = true;
+            await streamAndMaybeCacheMedia(partialResp, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, partialContentLength, rangeUsed, partial, numericLength);
+            return;
+          } else {
+            await streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, contentLength, '', false, numericLength);
+            return;
+          }
         } else if (contentType.startsWith('image') && si === 'false') {
           server.send(jsonMsg('im', contentType, '', requestQ, ''));
           data = await response.arrayBuffer();
@@ -343,30 +363,44 @@ function uint8ToBase64(u8) {
 
 // Helper: stream media and cache if under limit
 async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey) {
-  server.send(jsonMsg('s', contentType, '', requestQ, ''));
+// Accept contentLength as an argument (may be empty string if not available)
+// Accepts additional args: rangeUsed (string), partial (bool), totalLength (number)
+async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, contentLength, rangeUsed = '', partial = false, totalLength = 0) {
+  // Communicate contentLength, rangeUsed, partial, and totalLength in the start message
+  // We'll use the 'd' field as a JSON string for richer info
+  const startInfo = JSON.stringify({
+    contentLength,
+    range: rangeUsed,
+    partial,
+    totalLength
+  });
+  server.send(jsonMsg('s', contentType, startInfo, requestQ, ''));
   let reader = response.body.getReader();
   let chunks = [];
-  let totalLength = 0;
+  let streamedLength = 0;
   while (true) {
     let { done, value } = await reader.read();
     if (done) break;
-    if (value) sendBinaryChunk(server, value, contentType, qbytes);
+    if (value) {
+      sendBinaryChunk(server, value, contentType, qbytes);
+      streamedLength += value.length || value.byteLength || 0;
+    }
     if (cacheChunks && value) {
       let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
-      if (totalLength + u8.length <= cacheLimit) {
+      if (streamedLength + u8.length <= cacheLimit) {
         chunks.push(u8);
-        totalLength += u8.length;
+        streamedLength += u8.length;
       } else {
         cacheChunks = false;
         chunks = [];
-        totalLength = 0;
+        streamedLength = 0;
       }
     }
   }
   server.send(jsonMsg('e', contentType, '', requestQ, ''));
   // Cache only if all chunks fit under limit
-  if (cacheChunks && totalLength > 0) {
-    let all = new Uint8Array(totalLength);
+  if (cacheChunks && streamedLength > 0) {
+    let all = new Uint8Array(streamedLength);
     let offset = 0;
     for (let c of chunks) {
       all.set(c, offset);
@@ -377,4 +411,5 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
     await cachePut(cacheKey, result, caches.default);
     server.send(result);
   }
+}
 }

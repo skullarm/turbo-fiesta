@@ -296,7 +296,7 @@ export default {
 
 function jsonMsg(t, c, d, q, si) {
   return JSON.stringify({ t, c, d, q, si });
-
+}
 function sendBinaryChunk(server, value, contentType, qbytes) {
   if (!value) return;
   let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
@@ -409,5 +409,4 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
     await cachePut(cacheKey, result, caches.default);
     server.send(result);
   }
-}
 }

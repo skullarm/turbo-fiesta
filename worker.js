@@ -296,7 +296,6 @@ export default {
 
 function jsonMsg(t, c, d, q, si) {
   return JSON.stringify({ t, c, d, q, si });
-}
 
 function sendBinaryChunk(server, value, contentType, qbytes) {
   if (!value) return;
@@ -362,7 +361,6 @@ function uint8ToBase64(u8) {
 }
 
 // Helper: stream media and cache if under limit
-async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey) {
 // Accept contentLength as an argument (may be empty string if not available)
 // Accepts additional args: rangeUsed (string), partial (bool), totalLength (number)
 async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, contentLength, rangeUsed = '', partial = false, totalLength = 0) {

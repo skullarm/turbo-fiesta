@@ -30,18 +30,17 @@ export default {
 
     server.addEventListener('message', async (m) => {
       // Rate limiting removed
-      let contentType, requestQ;
+      let contentType;
       try {
-        const { u, a, q, au, si, method, body } = JSON.parse(m.data);
-        // Support os (offset start) and oe (offset end) for media resume
-        let os = 0, oe = null;
-        try {
-          const msgData = JSON.parse(m.data);
-          os = msgData.os || 0;
-          oe = (msgData.oe !== undefined && msgData.oe !== null) ? msgData.oe : null;
-        } catch {}
+        // Parse message once and destructure all needed fields
+        const msgData = JSON.parse(m.data);
+        const {
+          u, a, q, au, si, method, body,
+          os = 0,
+          oe = null
+        } = msgData;
         // Use q as the request string, not query
-        requestQ = q;
+        const requestQ = q;
         const qbytes = enc.encode(q);
         const fetchMethod = method ? method.toUpperCase() : 'GET';
         // Simple daily auth
@@ -51,7 +50,7 @@ export default {
         let dd = dt.getUTCDate();
         let mAu = btoa(`${y}${mn}${dd}`);
         if (mAu !== au) {
-          let msg = jsonMsg('er', contentType, 'er: auth error', requestQ, '');
+          const msg = jsonMsg('er', contentType, 'er: auth error', requestQ, '');
           server.send(msg);
           return;
         }
@@ -66,8 +65,8 @@ export default {
             clientCode = 'Sample client unavailable. (Could not fetch from GitHub)';
           }
           // Format as HTML (show as raw HTML for easy copy/view)
-          let html = `<html><head><title>Sample Client</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Sample Client (ws-client-demo.html)</h2><pre>${clientCode.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
-          let result = jsonMsg('r', 'text/html', html, requestQ, '');
+          const html = `<html><head><title>Sample Client</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Sample Client (ws-client-demo.html)</h2><pre>${clientCode.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
+          const result = jsonMsg('r', 'text/html', html, requestQ, '');
           server.send(result);
           return;
         }
@@ -80,8 +79,8 @@ export default {
             code = 'Source unavailable. (Could not fetch from GitHub)';
           }
           // Format as HTML
-          let html = `<html><head><title>Server Code</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Server Code</h2><pre>${code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
-          let result = jsonMsg('r', 'text/html', html, requestQ, '');
+          const html = `<html><head><title>Server Code</title><style>body{background:#222;color:#eee;font-family:monospace;}pre{background:#111;padding:1em;overflow:auto;}</style></head><body><h2>Server Code</h2><pre>${code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre></body></html>`;
+          const result = jsonMsg('r', 'text/html', html, requestQ, '');
           server.send(result);
           return;
         }
@@ -110,7 +109,7 @@ export default {
         cacheUrl.searchParams.set('ua', a || '');
         const cacheKey = cacheUrl.toString();
         const cache = caches.default;
-        let response = await cache.match(cacheKey);
+        const response = await cache.match(cacheKey);
         let result, data;
 
         if (response) {

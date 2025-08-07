@@ -33,9 +33,13 @@ export default {
       let contentType, requestQ;
       try {
         const { u, a, q, au, si, method, body } = JSON.parse(m.data);
-        // Support offset for media resume
-        let offset = 0;
-        try { offset = JSON.parse(m.data).offset || 0; } catch {}
+        // Support os (offset start) and oe (offset end) for media resume
+        let os = 0, oe = null;
+        try {
+          const msgData = JSON.parse(m.data);
+          os = msgData.os || 0;
+          oe = (msgData.oe !== undefined && msgData.oe !== null) ? msgData.oe : null;
+        } catch {}
         // Use q as the request string, not query
         requestQ = q;
         const qbytes = enc.encode(q);
@@ -85,13 +89,22 @@ export default {
         // Prepare fetchOptions before using in cacheKey
         // fetchOptions will be declared later, only build cacheKey here
         const acceptHeader = 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9';
-        // Build a fully qualified cache key URL with variant info as query params
+        // Robust URL normalization
+        let normalizedU = (typeof u === 'string') ? u.trim() : '';
+        // If protocol-relative (//host), prepend https:
+        if (/^\/\//.test(normalizedU)) {
+          normalizedU = 'https:' + normalizedU;
+        }
+        // If missing protocol, prepend https://
+        if (!/^https?:\/\//i.test(normalizedU) && /^[\w.-]+(\:[0-9]+)?(\/|$)/.test(normalizedU)) {
+          normalizedU = 'https://' + normalizedU;
+        }
         let cacheUrl;
         try {
-          cacheUrl = new URL(u);
+          cacheUrl = new URL(normalizedU);
         } catch {
-          // fallback: if u is not a valid URL, use a dummy base
-          cacheUrl = new URL(u, 'https://dummy.local');
+          // fallback: if normalizedU is not a valid URL, use a dummy base (for relative paths only)
+          cacheUrl = new URL(normalizedU, 'https://dummy.local');
         }
         cacheUrl.searchParams.set('accept', fetchMethod === 'GET' ? acceptHeader : '');
         cacheUrl.searchParams.set('ua', a || '');
@@ -132,9 +145,15 @@ export default {
           signal: controller.signal,
           redirect: 'manual' // handle redirects manually to avoid subrequest chains
         };
-        // If resuming media, add Range header
-        if (offset > 0 && u.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) {
-          fetchOptions.headers['Range'] = `bytes=${offset}-`;
+        // If resuming media, add Range header (support os and oe)
+        if ((os > 0 || oe !== null) && u.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) {
+          let rangeHeader = '';
+          if (oe !== null && !isNaN(oe)) {
+            rangeHeader = `bytes=${os}-${oe}`;
+          } else {
+            rangeHeader = `bytes=${os}-`;
+          }
+          fetchOptions.headers['Range'] = rangeHeader;
         }
         if (["POST", "PUT", "PATCH"].includes(fetchMethod) && body) {
           fetchOptions.body = body;
@@ -222,7 +241,7 @@ export default {
         let shouldCache = false;
         let cacheChunks = true;
         const cacheLimit = 10 * 1024 * 1024; // 10MB
-        const PARTIAL_LIMIT = 10 * 1024 * 1024; // 10MB
+        // PARTIAL_LIMIT logic removed; always stream full response
         if (!contentType) {
           data = await response.text();
           result = jsonMsg('r', 'n', data, requestQ, '');
@@ -232,28 +251,37 @@ export default {
           contentType.startsWith('audio') ||
           (contentType.startsWith('image') && si === 'true')
         ) {
-          // Get content-length from response headers if available
+          // Get content-length (chunk size) and totalLength (full file size)
           let contentLength = response.headers.get('content-length') || '';
-          let rangeUsed = '';
-          let partial = false;
-          let numericLength = parseInt(contentLength, 10);
-          // If content-length is above PARTIAL_LIMIT, fetch only the first PARTIAL_LIMIT bytes
-          if (numericLength && numericLength > PARTIAL_LIMIT && !request.headers.get('Range')) {
-            // Abort current response, start a new fetch with Range header
-            try { response.body.cancel && response.body.cancel(); } catch {}
-            let rangeHeader = `bytes=0-${PARTIAL_LIMIT-1}`;
-            let partialFetchOptions = { ...fetchOptions };
-            partialFetchOptions.headers = { ...fetchOptions.headers, Range: rangeHeader };
-            let partialResp = await fetch(finalUrl, partialFetchOptions);
-            let partialContentLength = partialResp.headers.get('content-length') || '';
-            rangeUsed = rangeHeader;
-            partial = true;
-            await streamAndMaybeCacheMedia(partialResp, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, partialContentLength, rangeUsed, partial, numericLength);
-            return;
-          } else {
-            await streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, contentLength, '', false, numericLength);
-            return;
+          let totalLength = null;
+          // Try to get totalLength from Content-Range header if present
+          let contentRange = response.headers.get('content-range');
+          if (contentRange) {
+            // Format: bytes start-end/total
+            let match = contentRange.match(/bytes +\d+-\d+\/(\d+|\*)/i);
+            if (match && match[1] && match[1] !== '*') {
+              totalLength = parseInt(match[1], 10);
+            }
           }
+          if (!totalLength) {
+            // fallback: use content-length if no range
+            totalLength = parseInt(contentLength, 10);
+          }
+          await streamAndMaybeCacheMedia(
+            response,
+            server,
+            contentType,
+            qbytes,
+            cacheChunks,
+            cacheLimit,
+            requestQ,
+            cacheKey,
+            contentLength,
+            '',
+            false,
+            totalLength
+          );
+          return;
         } else if (contentType.startsWith('image') && si === 'false') {
           server.send(jsonMsg('im', contentType, '', requestQ, ''));
           data = await response.arrayBuffer();

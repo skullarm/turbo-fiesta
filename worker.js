@@ -121,17 +121,17 @@ export default {
           if (result.c && (result.c.startsWith('image') || result.c === 'application/pdf') && si === 'true' && result.d) {
             // result.d is base64 string
             const b64 = result.d;
-            // Decode base64 to Uint8Array
-            function base64ToUint8Array(b64) {
-              const binary = atob(b64);
-              const len = binary.length;
-              const bytes = new Uint8Array(len);
-              for (let i = 0; i < len; i++) {
-                bytes[i] = binary.charCodeAt(i);
-              }
-              return bytes;
-            }
             const u8 = base64ToUint8Array(b64);
+// Helper: decode base64 to Uint8Array
+function base64ToUint8Array(b64) {
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
             // Send start message (mimic streamAndMaybeCacheMedia)
             const startInfo = JSON.stringify({
               contentLength: u8.length,

@@ -34,11 +34,13 @@ export default {
       try {
         // Parse message once and destructure all needed fields
         const msgData = JSON.parse(m.data);
-        const {
+        let {
           u, a, q, au, si, method, body,
           os = 0,
           oe = null
         } = msgData;
+        // Set si to 'true' by default if not provided
+        if (typeof si === 'undefined') si = 'true';
         // Use q as the request string, not query
         const requestQ = q;
         const qbytes = enc.encode(q);

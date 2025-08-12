@@ -115,8 +115,43 @@ export default {
         if (response) {
           result = await response.json();
           result.q = requestQ;
-          server.send(JSON.stringify(result));
-          return;
+          // If cached image and si==='true', stream it in chunks
+          if (result.c && result.c.startsWith('image') && si === 'true' && result.d) {
+            // result.d is base64 string
+            const b64 = result.d;
+            // Decode base64 to Uint8Array
+            function base64ToUint8Array(b64) {
+              const binary = atob(b64);
+              const len = binary.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
+              }
+              return bytes;
+            }
+            const u8 = base64ToUint8Array(b64);
+            // Send start message (mimic streamAndMaybeCacheMedia)
+            const startInfo = JSON.stringify({
+              contentLength: u8.length,
+              range: '',
+              partial: false,
+              totalLength: u8.length
+            });
+            server.send(jsonMsg('s', result.c, startInfo, requestQ, ''));
+            // Send in chunks (32KB)
+            const CHUNK_SIZE = 32 * 1024;
+            for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
+              const chunk = u8.subarray(i, i + CHUNK_SIZE);
+              sendBinaryChunk(server, chunk, result.c, enc.encode(requestQ));
+            }
+            server.send(jsonMsg('e', result.c, '', requestQ, ''));
+            // Optionally, send the JSON result as well for compatibility
+            // server.send(JSON.stringify(result));
+            return;
+          } else {
+            server.send(JSON.stringify(result));
+            return;
+          }
         }
 
 

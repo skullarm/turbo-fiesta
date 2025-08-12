@@ -117,8 +117,8 @@ export default {
         if (response) {
           result = await response.json();
           result.q = requestQ;
-          // If cached image and si==='true', stream it in chunks
-          if (result.c && result.c.startsWith('image') && si === 'true' && result.d) {
+          // If cached image/pdf and si==='true', stream it in chunks
+          if (result.c && (result.c.startsWith('image') || result.c === 'application/pdf') && si === 'true' && result.d) {
             // result.d is base64 string
             const b64 = result.d;
             // Decode base64 to Uint8Array
@@ -285,7 +285,8 @@ export default {
         } else if (
           contentType.startsWith('video') ||
           contentType.startsWith('audio') ||
-          (contentType.startsWith('image') && si === 'true')
+          (contentType.startsWith('image') && si === 'true') ||
+          (contentType === 'application/pdf' && si === 'true')
         ) {
           // Get content-length (chunk size) and totalLength (full file size)
           let contentLength = response.headers.get('content-length') || '';
@@ -364,8 +365,8 @@ function jsonMsg(t, c, d, q, si) {
 function sendBinaryChunk(server, value, contentType, qbytes) {
   if (!value) return;
   let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
-  // Always prepend qbytes for image/audio/video
-  if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video')) {
+  // Always prepend qbytes for image/audio/video/pdf
+  if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video') || contentType === 'application/pdf') {
     const ca = new Uint8Array(qbytes.length + u8.length);
     ca.set(qbytes, 0);
     ca.set(u8, qbytes.length);

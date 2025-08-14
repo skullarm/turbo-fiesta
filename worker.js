@@ -10,6 +10,20 @@ export default {
 
     const enc = new TextEncoder();
 
+    // Safe send wrapper to avoid throwing when client disconnects
+    let _wsClosed = false;
+    function safeSend(payload) {
+      if (_wsClosed) return false;
+      try {
+        server.send(payload);
+        return true;
+      } catch (e) {
+        _wsClosed = true;
+        try { server.close(); } catch (e) {}
+        return false;
+      }
+    }
+
     // WebSocket keepalive: send ping every 30s
     let pingInterval = setInterval(() => {
       try { server.send(jsonMsg('ping', '', '', '', '')); } catch {}
@@ -31,12 +45,12 @@ export default {
           oe = null
         } = msgData;
 
-        // Set si to 'true' by default if not provided
-        if (typeof si === 'undefined') si = 'true';
+  // Streaming-images (si) is always enabled now
+  const STREAM_IMAGES = true;
         
-        // Use q as the request string, not query
-        const requestQ = q;
-        const qbytes = enc.encode(q);
+  // Use q as the request string, not query. Default to empty string.
+  const requestQ = (typeof q === 'undefined' || q === null) ? '' : q;
+  const qbytes = enc.encode(requestQ);
         const fetchMethod = method ? method.toUpperCase() : 'GET';
         
         // Simple daily auth
@@ -84,7 +98,7 @@ export default {
           let dataStr = match[3];
           let u8;
           try {
-            u8 = isBase64 ? Uint8Array.from(atob(dataStr), c => c.charCodeAt(0)) : new TextEncoder().encode(decodeURIComponent(dataStr));
+            u8 = isBase64 ? base64ToUint8Array(dataStr) : new TextEncoder().encode(decodeURIComponent(dataStr));
           } catch (e) {
             server.send(jsonMsg('er', '', 'Failed to decode data URL', requestQ, ''));
             return;
@@ -96,13 +110,13 @@ export default {
             partial: false,
             totalLength: u8.length
           });
-          server.send(jsonMsg('s', mime, startInfo, requestQ, ''));
+          safeSend(jsonMsg('s', mime, startInfo, requestQ, ''));
           const CHUNK_SIZE = 32 * 1024;
           for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
             const chunk = u8.subarray(i, i + CHUNK_SIZE);
-            sendBinaryChunk(server, chunk, mime, enc.encode(requestQ));
+            if (!sendBinaryChunk(server, chunk, mime, enc.encode(requestQ))) break;
           }
-          server.send(jsonMsg('e', mime, '', requestQ, ''));
+          safeSend(jsonMsg('e', mime, '', requestQ, ''));
           return;
         }
 
@@ -174,12 +188,12 @@ export default {
           result = await response.json();
           result.q = requestQ;
           
-          // Handle cached media streams
-          if (result.c && (result.c.startsWith('image') || result.c === 'application/pdf') && si === 'true' && result.d) {
+          // Handle cached media streams (images & PDFs always streamed)
+          if (result.c && (result.c.startsWith('image') || result.c === 'application/pdf') && result.d) {
             const b64 = result.d;
-            const u8 = new Uint8Array(atob(b64).split('').map(c => c.charCodeAt(0)));
+            const u8 = base64ToUint8Array(b64);
             
-            server.send(jsonMsg('s', result.c, JSON.stringify({
+            safeSend(jsonMsg('s', result.c, JSON.stringify({
               contentLength: u8.length,
               range: '',
               partial: false,
@@ -189,14 +203,14 @@ export default {
             // Send in optimized chunks
             const CHUNK_SIZE = 32 * 1024;
             for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
-              sendBinaryChunk(server, u8.subarray(i, i + CHUNK_SIZE), result.c, qbytes);
+              if (!sendBinaryChunk(server, u8.subarray(i, i + CHUNK_SIZE), result.c, qbytes)) break;
             }
             
-            server.send(jsonMsg('e', result.c, '', requestQ, ''));
+            safeSend(jsonMsg('e', result.c, '', requestQ, ''));
             return;
           }
           
-          server.send(JSON.stringify(result));
+          safeSend(JSON.stringify(result));
           return;
         }
 
@@ -257,17 +271,17 @@ export default {
         // Process the response
         contentType = response.headers.get('Content-Type')?.toLowerCase() || '';
         const ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
-
-        if (!contentType) {
+        
+  if (!contentType) {
           data = await response.text();
           result = jsonMsg('r', 'n', data, requestQ, '');
           await cachePut(cacheKey, result, cache);
           server.send(result);
         } 
         else if (contentType.startsWith('video') || 
-                 contentType.startsWith('audio') || 
-                 (contentType.startsWith('image') && si === 'true') || 
-                 (contentType === 'application/pdf' && si === 'true')) {
+     contentType.startsWith('audio') || 
+     contentType.startsWith('image') || 
+     contentType === 'application/pdf') {
           
           await streamAndMaybeCacheMedia(
             response,
@@ -284,19 +298,7 @@ export default {
             parseInt(response.headers.get('content-length'), 10) || 0
           );
         }
-        else if (contentType.startsWith('image') && si === 'false') {
-          server.send(jsonMsg('im', contentType, '', requestQ, ''));
-          data = await response.arrayBuffer();
-          if (data) {
-            const u8 = new Uint8Array(data);
-            server.send(u8);
-            
-            if (data.byteLength <= 10 * 1024 * 1024) {  // 10MB cache limit
-              result = jsonMsg('r', contentType, uint8ToBase64(u8), requestQ, '');
-              await cachePut(cacheKey, result, cache);
-            }
-          }
-        }
+        
         else {
           if (ce === 'gzip' || ce === 'br') {
             const decompressed = await decompress(response.body, ce);
@@ -362,17 +364,39 @@ function normalizeUrl(url) {
 function jsonMsg(t, c, d, q, si) {
   return JSON.stringify({ t, c, d, q, si });
 }
+function base64ToUint8Array(b64) {
+  // decode in chunks to avoid huge intermediate strings
+  const binary = atob(b64);
+  const len = binary.length;
+  const u8 = new Uint8Array(len);
+  const CHUNK = 0x8000; // 32KB
+  for (let i = 0; i < len; i += CHUNK) {
+    const end = Math.min(i + CHUNK, len);
+    for (let j = i; j < end; j++) {
+      u8[j] = binary.charCodeAt(j);
+    }
+  }
+  return u8;
+}
+
 function sendBinaryChunk(server, value, contentType, qbytes) {
-  if (!value) return;
+  if (!value) return true;
   let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
-  // Always prepend qbytes for image/audio/video/pdf
-  if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video') || contentType === 'application/pdf') {
-    const ca = new Uint8Array(qbytes.length + u8.length);
-    ca.set(qbytes, 0);
-    ca.set(u8, qbytes.length);
-    server.send(ca);
-  } else {
-    server.send(u8);
+  try {
+    // Always prepend qbytes for image/audio/video/pdf to preserve protocol
+    if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video') || contentType === 'application/pdf') {
+      const ca = new Uint8Array(qbytes.length + u8.length);
+      ca.set(qbytes, 0);
+      ca.set(u8, qbytes.length);
+      server.send(ca);
+    } else {
+      server.send(u8);
+    }
+    return true;
+  } catch (e) {
+    // Caller should stop streaming when false is returned
+    try { server.close(); } catch (er) {}
+    return false;
   }
 }
 
@@ -458,6 +482,11 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
       undefined
   }), requestQ, ''));
 
+  if (!response.body) {
+    // Nothing to stream
+    server.send(jsonMsg('e', contentType, '', requestQ, ''));
+    return;
+  }
   const reader = response.body.getReader();
   try {
     while (true) {
@@ -465,7 +494,7 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
       if (done) break;
       
       if (value) {
-        sendBinaryChunk(server, value, contentType, qbytes);
+        if (!sendBinaryChunk(server, value, contentType, qbytes)) break;
         
         // Only process for caching if we're collecting chunks and still under limit
         if (chunks) {
@@ -497,6 +526,6 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
       server.send(result);
     }
   } finally {
-    server.send(jsonMsg('e', contentType, '', requestQ, ''));
+    safeSend(jsonMsg('e', contentType, '', requestQ, ''));
   }
 }

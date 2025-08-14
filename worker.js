@@ -32,7 +32,7 @@ export default {
         } = msgData;
 
         // Set si to 'true' by default if not provided
-        if (typeof si === 'undefined') si = true;
+        if (typeof si === 'undefined') si = 'true';
         
         // Use q as the request string, not query
         const requestQ = q;
@@ -63,11 +63,46 @@ export default {
 
         // Prepare fetchOptions before using in cacheKey
         const acceptHeader = 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9';
-        
+
         // Use optimized URL normalization
         const normalizedU = normalizeUrl(u);
         if (!normalizedU) {
           server.send(jsonMsg('er', '', 'Invalid URL provided', requestQ, ''));
+          return;
+        }
+
+        // Handle data URLs directly (do not cache/fetch)
+        if (normalizedU.startsWith('data:')) {
+          // Parse data URL: data:[<mediatype>][;base64],<data>
+          const match = normalizedU.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+          if (!match) {
+            server.send(jsonMsg('er', '', 'Invalid data URL', requestQ, ''));
+            return;
+          }
+          let mime = match[1] || 'application/octet-stream';
+          let isBase64 = !!match[2];
+          let dataStr = match[3];
+          let u8;
+          try {
+            u8 = isBase64 ? Uint8Array.from(atob(dataStr), c => c.charCodeAt(0)) : new TextEncoder().encode(decodeURIComponent(dataStr));
+          } catch (e) {
+            server.send(jsonMsg('er', '', 'Failed to decode data URL', requestQ, ''));
+            return;
+          }
+          // Stream as if it were a fetched image/media
+          const startInfo = JSON.stringify({
+            contentLength: u8.length,
+            range: '',
+            partial: false,
+            totalLength: u8.length
+          });
+          server.send(jsonMsg('s', mime, startInfo, requestQ, ''));
+          const CHUNK_SIZE = 32 * 1024;
+          for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
+            const chunk = u8.subarray(i, i + CHUNK_SIZE);
+            sendBinaryChunk(server, chunk, mime, enc.encode(requestQ));
+          }
+          server.send(jsonMsg('e', mime, '', requestQ, ''));
           return;
         }
 

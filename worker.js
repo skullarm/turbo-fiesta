@@ -17,16 +17,7 @@ export default {
     server.addEventListener('close', () => {
       clearInterval(pingInterval);
       server.close();
-    });
-
-
-    // Send initial info
-    try {
-      
-      server.send(jsonMsg('info', '', 'Welcome Golf Gangstas!!', '', ''));
-    } catch (e) {
-      console.error(e);
-    }
+    });  
 
     server.addEventListener('message', async (m) => {
       // Rate limiting removed

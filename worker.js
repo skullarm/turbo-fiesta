@@ -36,6 +36,12 @@ export default {
     server.addEventListener('message', async (m) => {
       // Rate limiting removed
       let contentType;
+
+      // Track controllers/timeouts for cleanup in finally
+      let controller = null;
+      let fetchTimeout = null;
+      const redirectTimeouts = [];
+
       try {
         // Parse message once and destructure all needed fields
         const msgData = JSON.parse(m.data);
@@ -60,18 +66,18 @@ export default {
         let dd = dt.getUTCDate();
         let mAu = btoa(`${y}${mn}${dd}`);
         if (mAu !== au) {
-          server.send(jsonMsg('er', '', 'Authentication failed', '', ''));
+          safeSend(jsonMsg('er', '', 'Authentication failed', '', ''));
           return;
         }
 
         // Special endpoint: return client demo code as HTML
         if (u === 'getcodeclient') {
-          server.send(jsonMsg('code', 'text/html', '<!-- client demo code here -->', '', ''));
+          safeSend(jsonMsg('code', 'text/html', '<!-- client demo code here -->', '', ''));
           return;
         }
         // Special endpoint: return server code as HTML
         if (u === 'getcode') {
-          server.send(jsonMsg('code', 'text/html', '<!-- server code here -->', '', ''));
+          safeSend(jsonMsg('code', 'text/html', '<!-- server code here -->', '', ''));
           return;
         }
 
@@ -81,7 +87,7 @@ export default {
         // Use optimized URL normalization
         const normalizedU = normalizeUrl(u);
         if (!normalizedU) {
-          server.send(jsonMsg('er', '', 'Invalid URL provided', requestQ, ''));
+          safeSend(jsonMsg('er', '', 'Invalid URL provided', requestQ, ''));
           return;
         }
 
@@ -90,7 +96,7 @@ export default {
           // Parse data URL: data:[<mediatype>][;base64],<data>
           const match = normalizedU.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
           if (!match) {
-            server.send(jsonMsg('er', '', 'Invalid data URL', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Invalid data URL', requestQ, ''));
             return;
           }
           let mime = match[1] || 'application/octet-stream';
@@ -100,7 +106,7 @@ export default {
           try {
             u8 = isBase64 ? base64ToUint8Array(dataStr) : new TextEncoder().encode(decodeURIComponent(dataStr));
           } catch (e) {
-            server.send(jsonMsg('er', '', 'Failed to decode data URL', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Failed to decode data URL', requestQ, ''));
             return;
           }
           // Stream as if it were a fetched image/media
@@ -110,11 +116,11 @@ export default {
             partial: false,
             totalLength: u8.length
           });
-          safeSend(jsonMsg('s', mime, startInfo, requestQ, ''));
+          if (!safeSend(jsonMsg('s', mime, startInfo, requestQ, ''))) return;
           const CHUNK_SIZE = 32 * 1024;
           for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
             const chunk = u8.subarray(i, i + CHUNK_SIZE);
-            if (!sendBinaryChunk(server, chunk, mime, enc.encode(requestQ))) break;
+            if (!sendBinaryChunk(server, chunk, mime, qbytes)) break;
           }
           safeSend(jsonMsg('e', mime, '', requestQ, ''));
           return;
@@ -131,10 +137,32 @@ export default {
         cacheUrl.searchParams.set('ua', a || '');
         const cacheKey = cacheUrl.toString();
         
-        // Check cache first
+        // Check cache first (prefer binary cache format if present)
         const cache = caches.default;
-        const response = await cache.match(cacheKey);
+        const binaryCacheKey = cacheKey + '&cache=bin1';
+        let cacheResponse = await cache.match(binaryCacheKey);
         let result, data;
+        if (cacheResponse) {
+          // Cached binary entry found — stream it in chunks (preserve protocol)
+          const cachedContentType = cacheResponse.headers.get('Content-Type') || 'application/octet-stream';
+          try {
+            const arr = new Uint8Array(await cacheResponse.arrayBuffer());
+            const startInfo = JSON.stringify({ contentLength: arr.length, range: '', partial: false, totalLength: arr.length });
+            safeSend(jsonMsg('s', cachedContentType, startInfo, requestQ, ''));
+            const CHUNK_SIZE = 32 * 1024;
+            for (let i = 0; i < arr.length; i += CHUNK_SIZE) {
+              if (!sendBinaryChunk(server, arr.subarray(i, i + CHUNK_SIZE), cachedContentType, qbytes)) break;
+            }
+            safeSend(jsonMsg('e', cachedContentType, '', requestQ, ''));
+            return;
+          } catch (e) {
+            // If streaming cached binary fails, fall through to fetch path
+            console.error('Failed to stream binary cache entry:', e);
+          }
+        }
+        // Fallback to existing JSON cache format
+        cacheResponse = await cache.match(cacheKey);
+        let response = cacheResponse;
 
         // Get origin for headers with fallback
         let origin;
@@ -152,8 +180,9 @@ export default {
           timeoutMs = 20000;
         }
 
-        const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
+        // Use outer-scoped controller/fetchTimeout so finally can clean them up
+        controller = new AbortController();
+        fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
         
         // Prepare fetch options with optimized headers
         let fetchOptions = {
@@ -193,12 +222,12 @@ export default {
             const b64 = result.d;
             const u8 = base64ToUint8Array(b64);
             
-            safeSend(jsonMsg('s', result.c, JSON.stringify({
+            if (!safeSend(jsonMsg('s', result.c, JSON.stringify({
               contentLength: u8.length,
               range: '',
               partial: false,
               totalLength: u8.length
-            }), requestQ, ''));
+            }), requestQ, ''))) return;
 
             // Send in optimized chunks
             const CHUNK_SIZE = 32 * 1024;
@@ -224,6 +253,8 @@ export default {
           const redirectController = new AbortController();
           const redirectTimeoutMs = Math.max(5000, timeoutMs - redirectCount * 2000);
           const redirectTimeout = setTimeout(() => redirectController.abort(), redirectTimeoutMs);
+          // record redirect timeout so finally can clear any leaked timers
+          redirectTimeouts.push(redirectTimeout);
           
           try {
             response = await fetch(finalUrl, { ...fetchOptions, signal: redirectController.signal });
@@ -254,7 +285,11 @@ export default {
           break;
         }
         
-        clearTimeout(fetchTimeout);
+        // fetchTimeout cleared here in normal flow, but ensure final cleanup in finally block
+        if (fetchTimeout) {
+          clearTimeout(fetchTimeout);
+          fetchTimeout = null;
+        }
 
         // Handle non-OK responses
         if (!response.ok) {
@@ -276,7 +311,7 @@ export default {
           data = await response.text();
           result = jsonMsg('r', 'n', data, requestQ, '');
           await cachePut(cacheKey, result, cache);
-          server.send(result);
+          safeSend(result);
         } 
         else if (contentType.startsWith('video') || 
      contentType.startsWith('audio') || 
@@ -309,7 +344,7 @@ export default {
           
           result = jsonMsg('r', contentType, data, requestQ, '');
           await cachePut(cacheKey, result, cache);
-          server.send(result);
+          safeSend(result);
         }
       } catch (e) {
         console.error('Proxy error:', e); // improved error logging
@@ -325,7 +360,26 @@ export default {
         }
         
         let errorMsg = jsonMsg('er', contentType, errorMessage, requestQ, '');
-        try { server.send(errorMsg); } catch {}
+        try { safeSend(errorMsg); } catch {}
+      } finally {
+        // Ensure timers and controllers are cleaned up to avoid leaks
+        try {
+          if (fetchTimeout) {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = null;
+          }
+        } catch (er) {}
+        try {
+          for (const t of redirectTimeouts) {
+            try { clearTimeout(t); } catch {}
+          }
+        } catch (er) {}
+        try {
+          if (controller) {
+            try { controller.abort(); } catch {}
+            controller = null;
+          }
+        } catch (er) {}
       }
     });
 
@@ -472,60 +526,102 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
   let streamedLength = 0;
 
   // Enhanced stream info for better client progress indication
-  server.send(jsonMsg('s', contentType, JSON.stringify({
+  try {
+    if (!server) return;
+  } catch (e) {}
+
+  // local safe send using the provided server
+  function localSafeSend(payload) {
+    try {
+      server.send(payload);
+      return true;
+    } catch (e) {
+      try { server.close(); } catch {}
+      return false;
+    }
+  }
+
+  if (!localSafeSend(jsonMsg('s', contentType, JSON.stringify({
     contentLength,
     range: rangeUsed,
     partial,
     totalLength,
-    expectedDuration: contentType.startsWith('video') || contentType.startsWith('audio') ? 
-      Math.ceil(parsedContentLength / 128000) : // Rough estimate for media
+    expectedDuration: (contentType.startsWith('video') || contentType.startsWith('audio')) && Number.isFinite(parsedContentLength) ? 
+      Math.ceil(parsedContentLength / 128000) : 
       undefined
-  }), requestQ, ''));
-
-  if (!response.body) {
-    // Nothing to stream
-    server.send(jsonMsg('e', contentType, '', requestQ, ''));
+  }), requestQ, ''))) {
     return;
   }
+
+  if (!response.body) {
+    localSafeSend(jsonMsg('e', contentType, '', requestQ, ''));
+    return;
+  }
+
   const reader = response.body.getReader();
+  let abortedEarly = false;
+
   try {
     while (true) {
       const {done, value} = await reader.read();
       if (done) break;
       
       if (value) {
-        if (!sendBinaryChunk(server, value, contentType, qbytes)) break;
+        if (!sendBinaryChunk(server, value, contentType, qbytes)) {
+          // client closed or send failed; stop streaming
+          abortedEarly = true;
+          break;
+        }
         
         // Only process for caching if we're collecting chunks and still under limit
         if (chunks) {
-          const chunkSize = value.length || value.byteLength || 0;
+          const u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
+          const chunkSize = u8.length || u8.byteLength || 0;
           streamedLength += chunkSize;
           
           if (streamedLength <= cacheLimit) {
-            chunks.push(new Uint8Array(value));
+            chunks.push(u8);
           } else {
-            // Stop collecting if we exceed limit
+            // exceed cache limit, stop collecting further chunks
+            // drop collected chunks to free memory
+            // keep streaming to client but no longer cache
+            // we set chunks variable to null to avoid further pushes
+            // (can't reassign const, so use length = 0 + flag)
             chunks.length = 0;
-            break;
+            // mark so we won't try to cache later
+            // note: we don't set chunks = null because it's const; instead rely on streamedLength check
           }
         }
       }
     }
-    
-    // Only cache if we collected all chunks and they fit within limit
-    if (chunks && chunks.length > 0) {
-      const all = new Uint8Array(streamedLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        all.set(chunk, offset);
-        offset += chunk.length;
+
+    // if we aborted early, try to cancel reader to free resources
+    if (abortedEarly) {
+      try { await reader.cancel(); } catch (e) {}
+      return;
+    }
+
+    // finished streaming; send end message
+    localSafeSend(jsonMsg('e', contentType, '', requestQ, ''));
+
+    // If we collected chunks and total size within limit, cache it
+    if (chunks && streamedLength > 0 && streamedLength <= cacheLimit) {
+      try {
+        // concatenate chunks
+        const out = new Uint8Array(streamedLength);
+        let pos = 0;
+        for (const c of chunks) {
+          out.set(c, pos);
+          pos += c.length;
+        }
+        const b64 = uint8ToBase64(out);
+        const result = jsonMsg('r', contentType, b64, requestQ, '');
+        await cachePut(cacheKey, result, caches.default);
+      } catch (e) {
+        // caching failure is non-fatal
       }
-      const b64 = uint8ToBase64(all);
-      const result = jsonMsg('r', contentType, b64, requestQ, '');
-      await cachePut(cacheKey, result, caches.default);
-      server.send(result);
     }
   } finally {
-    safeSend(jsonMsg('e', contentType, '', requestQ, ''));
+    try { await reader.cancel(); } catch (e) {}
   }
 }

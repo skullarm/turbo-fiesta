@@ -1,1 +1,0 @@
-let d=document,w,u,h={},si=0,p=new Map(),n=new TextDecoder(),dl=false,dld=false,a=0,dv="<div id='pl'><button></button></div>"

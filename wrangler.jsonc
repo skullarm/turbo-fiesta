@@ -1,5 +1,5 @@
 {
-  "name": "turbo-fiesta",
+  "name": "paytel2",
   "main": "worker.js", 
   "observability": {
     "enabled": true,

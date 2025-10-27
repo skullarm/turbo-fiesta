@@ -1,5 +1,5 @@
 {
-  "name": "turbo-fiesta",
+  "name": "poytel",
   "main": "worker.js", 
   "observability": {
     "enabled": true,

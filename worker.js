@@ -9,6 +9,8 @@ export default {
     }
 
     const enc = new TextEncoder();
+    const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const MAX_INLINE_BYTES = 10 * 1024 * 1024; // 10MB
 
     // Safe send wrapper to avoid throwing when client disconnects
     let _wsClosed = false;
@@ -30,7 +32,6 @@ export default {
     }, 30000);
     server.addEventListener('close', () => {
       clearInterval(pingInterval);
-      server.close();
     });  
 
     server.addEventListener('message', async (m) => {
@@ -44,7 +45,13 @@ export default {
 
       try {
         // Parse message once and destructure all needed fields
-        const msgData = JSON.parse(m.data);
+        let msgData;
+        try {
+          msgData = JSON.parse(m.data);
+        } catch (err) {
+          safeSend(jsonMsg('er', '', 'Malformed JSON', '', ''));
+          return;
+        }
         let {
           u, a, q, au, si, method, body,
           os = 0,
@@ -53,10 +60,17 @@ export default {
 
   // Streaming-images (si) is always enabled now
   const STREAM_IMAGES = true;
-        
+
   // Use q as the request string, not query. Default to empty string.
   const requestQ = (typeof q === 'undefined' || q === null) ? '' : q;
   const qbytes = enc.encode(requestQ);
+
+  // Basic validation for URL
+  if (typeof u !== 'string' || !u.trim()) {
+    safeSend(jsonMsg('er', '', 'Invalid URL', requestQ, ''));
+    return;
+  }
+
         const fetchMethod = method ? method.toUpperCase() : 'GET';
         
         // Simple daily auth
@@ -91,6 +105,17 @@ export default {
           return;
         }
 
+        // Ensure only supported schemes are used
+        try {
+          const parsedTry = new URL(normalizedU);
+          if (!['http:', 'https:', 'data:'].includes(parsedTry.protocol)) {
+            safeSend(jsonMsg('er', '', 'Unsupported URL scheme', requestQ, ''));
+            return;
+          }
+        } catch (err) {
+          // If it's relative, it's okay; normalizeUrl should have handled missing protocol
+        }
+
         // Handle data URLs directly (do not cache/fetch)
         if (normalizedU.startsWith('data:')) {
           // Parse data URL: data:[<mediatype>][;base64],<data>
@@ -102,6 +127,14 @@ export default {
           let mime = match[1] || 'application/octet-stream';
           let isBase64 = !!match[2];
           let dataStr = match[3];
+
+          // Conservative size estimate to avoid OOM from huge data URIs
+          const estimatedBytes = isBase64 ? Math.ceil(dataStr.length * 3 / 4) : dataStr.length;
+          if (estimatedBytes > MAX_INLINE_BYTES) {
+            safeSend(jsonMsg('er', '', 'Data URI too large', requestQ, ''));
+            return;
+          }
+
           let u8;
           try {
             u8 = isBase64 ? base64ToUint8Array(dataStr) : new TextEncoder().encode(decodeURIComponent(dataStr));
@@ -185,17 +218,18 @@ export default {
         fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
         
         // Prepare fetch options with optimized headers
+        const headersObj = {
+          'User-Agent': a || DEFAULT_UA,
+          'Accept-Encoding': 'identity',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept': acceptHeader
+        };
+        const cfProto = request.headers.get('CF-Proto');
+        if (cfProto) headersObj['X-Forwarded-Proto'] = cfProto;
+
         let fetchOptions = {
           method: fetchMethod,
-          headers: {
-            'User-Agent': a || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Encoding': 'identity',
-            'X-Forwarded-Proto': request.headers.get('CF-Proto'),
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': normalizedU,
-            'Origin': origin,
-            'Accept': acceptHeader
-          },
+          headers: headersObj,
           signal: controller.signal,
           redirect: 'manual' // handle redirects manually to avoid subrequest chains
         };
@@ -270,9 +304,23 @@ export default {
             if (redirectCount >= maxRedirects) {
               throw new Error('Too many redirects');
             }
-            
-            const nextUrl = response.headers.get('Location');
-            if (visitedUrls.has(finalUrl) || nextUrl === finalUrl) {
+
+            const location = response.headers.get('Location');
+            if (!location) throw new Error('Redirect without Location');
+
+            let nextUrl;
+            try {
+              nextUrl = new URL(location, finalUrl).toString();
+            } catch (err) {
+              throw new Error('Invalid redirect Location');
+            }
+
+            const proto = new URL(nextUrl).protocol;
+            if (!['http:', 'https:'].includes(proto)) {
+              throw new Error('Unsupported redirect scheme');
+            }
+
+            if (visitedUrls.has(nextUrl) || nextUrl === finalUrl) {
               throw new Error('Redirect loop detected');
             }
 

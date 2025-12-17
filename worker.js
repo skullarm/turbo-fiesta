@@ -1,16 +1,5 @@
 export default {
   async fetch(request) {
-    let client, server;
-    try {
-      [client, server] = Object.values(new WebSocketPair());
-      server.accept();
-
-      // Choose a session-sticky User-Agent for this WebSocket connection
-      let sessionUA = chooseUserAgent();
-    } catch (e) {
-      return new Response('WebSocket error', { status: 500 });
-    }
-
     const enc = new TextEncoder();
     const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     const MAX_INLINE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -27,6 +16,17 @@ export default {
       // Accept a short client-provided UA as a hint, otherwise pick a random one from the pool
       if (preferred && typeof preferred === 'string' && preferred.length > 0 && preferred.length < 200) return preferred;
       return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
+    }
+
+    let client, server;
+    try {
+      [client, server] = Object.values(new WebSocketPair());
+      server.accept();
+
+      // Choose a session-sticky User-Agent for this WebSocket connection
+      let sessionUA = chooseUserAgent();
+    } catch (e) {
+      return new Response('WebSocket error', { status: 500 });
     }
 
     // Safe send wrapper to avoid throwing when client disconnects

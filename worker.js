@@ -4,6 +4,9 @@ export default {
     try {
       [client, server] = Object.values(new WebSocketPair());
       server.accept();
+
+      // Choose a session-sticky User-Agent for this WebSocket connection
+      let sessionUA = chooseUserAgent();
     } catch (e) {
       return new Response('WebSocket error', { status: 500 });
     }
@@ -11,6 +14,20 @@ export default {
     const enc = new TextEncoder();
     const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     const MAX_INLINE_BYTES = 10 * 1024 * 1024; // 10MB
+
+    // Small, realistic pool of User-Agent strings. We choose one per WebSocket session to remain consistent.
+    const UA_POOL = [
+      // Representative desktop UAs
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    ];
+
+    function chooseUserAgent(preferred) {
+      // Accept a short client-provided UA as a hint, otherwise pick a random one from the pool
+      if (preferred && typeof preferred === 'string' && preferred.length > 0 && preferred.length < 200) return preferred;
+      return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
+    }
 
     // Safe send wrapper to avoid throwing when client disconnects
     let _wsClosed = false;
@@ -218,14 +235,13 @@ export default {
         fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
         
         // Prepare fetch options with optimized headers
+        // Use the session-sticky UA for all outbound requests for this connection.
         const headersObj = {
-          'User-Agent': a || DEFAULT_UA,
+          'User-Agent': sessionUA || DEFAULT_UA,
           'Accept-Encoding': 'identity',
           'Accept-Language': 'en-US,en;q=0.9',
           'Accept': acceptHeader
         };
-        const cfProto = request.headers.get('CF-Proto');
-        if (cfProto) headersObj['X-Forwarded-Proto'] = cfProto;
 
         let fetchOptions = {
           method: fetchMethod,

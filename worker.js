@@ -144,21 +144,24 @@ export default {
         let cacheResponse = await cache.match(binaryCacheKey);
         let result, data;
         if (cacheResponse) {
-          // Cached binary entry found — stream it in chunks (preserve protocol)
+          // Cached binary entry found — stream it without loading entire buffer
           const cachedContentType = cacheResponse.headers.get('Content-Type') || 'application/octet-stream';
           try {
-            const arr = new Uint8Array(await cacheResponse.arrayBuffer());
-            const startInfo = JSON.stringify({ contentLength: arr.length, range: '', partial: false, totalLength: arr.length });
-            safeSend(jsonMsg('s', cachedContentType, startInfo, requestQ, ''));
-            const CHUNK_SIZE = 32 * 1024;
-            for (let i = 0; i < arr.length; i += CHUNK_SIZE) {
-              if (!sendBinaryChunk(server, arr.subarray(i, i + CHUNK_SIZE), cachedContentType, qbytes)) break;
+            const contentLengthHeader = cacheResponse.headers.get('content-length');
+            const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : '';
+            const startInfo = JSON.stringify({ contentLength: contentLength, range: '', partial: false, totalLength: contentLength });
+            if (!safeSend(jsonMsg('s', cachedContentType, startInfo, requestQ, ''))) return;
+
+            const reader = cacheResponse.body.getReader();
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (!sendBinaryChunk(server, value, cachedContentType, qbytes)) break;
             }
             safeSend(jsonMsg('e', cachedContentType, '', requestQ, ''));
             return;
           } catch (e) {
             // If streaming cached binary fails, fall through to fetch path
-            console.error('Failed to stream binary cache entry:', e);
           }
         }
         // Fallback to existing JSON cache format
@@ -334,7 +337,7 @@ export default {
             contentType,
             qbytes,
             true,
-            10 * 1024 * 1024,  // 10MB cache limit
+            5 * 1024 * 1024,  // 5MB cache limit (reduced to save memory/CPU)
             requestQ,
             cacheKey,
             response.headers.get('content-length') || '',
@@ -425,7 +428,7 @@ function normalizeUrl(url) {
   return url;
 }
 
-function jsonMsg(t, c, d, q, si) {
+function jsonMsg(t, c = '', d = '', q = '', si = '') {
   return JSON.stringify({ t, c, d, q, si });
 }
 function base64ToUint8Array(b64) {

@@ -82,6 +82,28 @@ export default {
           return;
         }
 
+        // Special endpoint: CMD_KV?key=[keyname]&val=[value]
+        // Writes provided key/value to the `STORE` KV binding using `STORE.put(key, val)`.
+        // Note: Consider restricting to admin if you don't want public writes.
+        if (typeof u === 'string' && u.startsWith('CMD_KV?')) {
+          try {
+            const params = new URLSearchParams(u.slice('CMD_KV?'.length));
+            const k = params.get('key');
+            const v = params.get('val');
+            if (!k || v === null) {
+              safeSend(jsonMsg('er', '', 'CMD_KV requires key and val', requestQ, ''));
+              return;
+            }
+            // Perform the KV write
+            await STORE.put(k, v);
+            safeSend(jsonMsg('ok', 'text/plain', 'OK', requestQ, ''));
+          } catch (e) {
+            console.error('CMD_KV error:', e);
+            safeSend(jsonMsg('er', '', 'Failed to write to STORE', requestQ, ''));
+          }
+          return;
+        }
+
         // Prepare fetchOptions before using in cacheKey
         const acceptHeader = 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9';
 

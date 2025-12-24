@@ -86,7 +86,7 @@ export default {
         const acceptHeader = 'text/html, text/plain, application/json, image/jpeg, image/png, video/mp4, audio/mp3, */*;q=0.9';
 
         // Use optimized URL normalization
-        const normalizedU = normalizeUrl(u);
+        let normalizedU = normalizeUrl(u);
         if (!normalizedU) {
           safeSend(jsonMsg('er', '', 'Invalid URL provided', requestQ, ''));
           return;
@@ -167,7 +167,7 @@ export default {
           } catch (e) {
             // Fallback: simple string replacements if URL parsing fails
             let newU = normalizedU;
-            for (const rep of [{ r: /\bGwilliam\b/gi, v: 'williams' }, { r: /\bAndrew\b/gi, v: 'andy' }, { r: /\bA\.?J\.?\b/gi, v: 'jim' }]) {
+            for (const rep of replacements) {
               newU = newU.replace(rep.r, rep.v);
             }
             normalizedU = newU;

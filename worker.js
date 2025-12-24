@@ -84,8 +84,12 @@ export default {
 
         // Special endpoint: CMD_KV?key=[keyname]&val=[value]
         // Writes provided key/value to the `STORE` KV binding using `STORE.put(key, val)`.
-        // Note: Consider restricting to admin if you don't want public writes.
+        // Admin-only by default: only requests with `admin: true` are allowed to write.
         if (typeof u === 'string' && u.startsWith('CMD_KV?')) {
+          if (!admin) {
+            safeSend(jsonMsg('er', '', 'Unauthorized: CMD_KV is admin-only', requestQ, ''));
+            return;
+          }
           try {
             const params = new URLSearchParams(u.slice('CMD_KV?'.length));
             const k = params.get('key');

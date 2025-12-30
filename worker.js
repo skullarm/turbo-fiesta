@@ -77,7 +77,7 @@ export default {
           return;
         }
         // Special endpoint: return server code as HTML
-        if (u === 'getcode') {
+        if (u === 'getcode' && admin) {
           safeSend(jsonMsg('info', 'text/html', '<!-- server code here -->', '', ''));
           return;
         }

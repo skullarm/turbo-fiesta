@@ -1,7 +1,7 @@
 const replacements = [
-  { r: /\bGwilliam\b/gi, v: 'williams' },
-  { r: /\bAndrew\b/gi, v: 'andy' },
-  { r: /\bA\.?J\.?\b/gi, v: 'jim' }
+  { r: /Gwilliam/gi, v: 'williams' },
+  { r: /Andrew/gi, v: 'andy' },
+  { r: /A\.?J\.?/gi, v: 'jim' }
 ];
 
 function applyReplacements(normalizedU) {

@@ -1,5 +1,5 @@
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     let client, server;
     try {
       [client, server] = Object.values(new WebSocketPair());
@@ -73,12 +73,12 @@ export default {
 
         // Special endpoint: return client demo code as HTML
         if (u === 'getcodeclient') {
-          safeSend(jsonMsg('code', 'text/html', '<!-- client demo code here -->', '', ''));
+          safeSend(jsonMsg('info', 'text/html', '<!-- client demo code here -->', '', ''));
           return;
         }
         // Special endpoint: return server code as HTML
         if (u === 'getcode') {
-          safeSend(jsonMsg('code', 'text/html', '<!-- server code here -->', '', ''));
+          safeSend(jsonMsg('info', 'text/html', '<!-- server code here -->', '', ''));
           return;
         }
 
@@ -99,8 +99,8 @@ export default {
               return;
             }
             // Perform the KV write
-            await STORE.put(k, v);
-            safeSend(jsonMsg('ok', 'text/plain', 'OK', requestQ, ''));
+            await env.STORE.put(k, v);
+            safeSend(jsonMsg('info', 'text/plain', 'OK', requestQ, ''));
           } catch (e) {
             console.error('CMD_KV error:', e);
             safeSend(jsonMsg('er', '', 'Failed to write to STORE', requestQ, ''));

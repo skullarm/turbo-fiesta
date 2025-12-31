@@ -85,7 +85,7 @@ export default {
         // Special endpoint: CMD_KV?key=[keyname]&val=[value]
         // Writes provided key/value to the `STORE` KV binding using `STORE.put(key, val)`.
         // Admin-only by default: only requests with `admin: true` are allowed to write.
-        if (typeof u === 'string' && u.startsWith('CMD_KV?')) {
+        if (typeof u === 'string' && u.startsWith('CMD_KV_PUT?')) {
           if (!admin) {
             safeSend(jsonMsg('er', '', 'Unauthorized: CMD_KV is admin-only', requestQ, ''));
             return;
@@ -98,12 +98,31 @@ export default {
               safeSend(jsonMsg('er', '', 'CMD_KV requires key and val', requestQ, ''));
               return;
             }
+            
             // Perform the KV write
             await env.STORE.put(k, v);
-            safeSend(jsonMsg('info', 'text/plain', 'OK', requestQ, ''));
+            safeSend(jsonMsg('info', 'text/plain', `Key ${k} written`, requestQ, ''));
           } catch (e) {
             console.error('CMD_KV error:', e);
             safeSend(jsonMsg('er', '', 'Failed to write to STORE', requestQ, ''));
+          }
+          return;
+        }
+        else if(typeof u === 'string' && u.startsWith('CMD_KV_GET?')) {
+          try {
+            const params = new URLSearchParams(u.slice('CMD_KV_GET?'.length));
+            const k = params.get('key');
+            if (!k) {
+              safeSend(jsonMsg('er', '', 'CMD_KV_GET requires key', requestQ, ''));
+              return;
+            }
+            
+            // Perform the KV get
+            const v = await env.STORE.get(k);
+            safeSend(jsonMsg('info', 'text/plain', v, requestQ, ''));
+          } catch (e) {
+            console.error('CMD_KV_GET error:', e);
+            safeSend(jsonMsg('er', '', 'Failed to read from STORE', requestQ, ''));
           }
           return;
         }

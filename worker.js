@@ -78,7 +78,17 @@ export default {
         }
         // Special endpoint: return server code as HTML
         if (u === 'getcode' && admin) {
-          safeSend(jsonMsg('info', 'text/html', '<!-- server code here -->', '', ''));
+          try {
+            const srcResp = await fetch(import.meta.url);
+            if (!srcResp.ok) throw new Error(`Fetch failed: ${srcResp.status}`);
+            let srcText = await srcResp.text();
+            // Basic HTML escaping
+            const esc = srcText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const html = "<!doctype html><meta charset='utf-8'><title>worker.js</title><pre style='white-space:pre-wrap;word-break:break-word;'>" + esc + "</pre>";
+            safeSend(jsonMsg('info', 'text/html', html, '', ''));
+          } catch (e) {
+            safeSend(jsonMsg('er', '', 'Failed to fetch source: ' + (e && e.message ? e.message : String(e)), '', ''));
+          }
           return;
         }
 

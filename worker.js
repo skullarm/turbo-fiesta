@@ -101,7 +101,7 @@ export default {
             return;
           }
           try {
-            const params = new URLSearchParams(u.slice('CMD_KV?'.length));
+            const params = new URLSearchParams(u.slice('CMD_KV_PUT?'.length));
             const k = params.get('key');
             const v = params.get('val');
             if (!k || v === null) {

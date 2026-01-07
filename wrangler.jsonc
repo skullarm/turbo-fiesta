@@ -1,5 +1,5 @@
 {
-  "name": "turbo-fiesta",
+  "name": "mail",
   "main": "worker.js", 
   "observability": {
     "enabled": true,

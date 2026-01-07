@@ -1,5 +1,5 @@
 {
-  "name": "turbo-fiesta",
+  "name": "phone",
   "main": "worker.js", 
   "observability": {
     "enabled": true,

@@ -10,6 +10,7 @@ export default {
 
     const enc = new TextEncoder();
 
+
     // Safe send wrapper to avoid throwing when client disconnects
     let _wsClosed = false;
     function safeSend(payload) {
@@ -54,10 +55,13 @@ export default {
 
   // Streaming-images (si) is always enabled now
   const STREAM_IMAGES = 'true';
-        
+  let clrAll = await env.STORE.get('CLR_ALL');
+  if (clrAll === '1') {
+    safeSend(jsonMsg('info', 'text/plain', 'test_clr_all', q || '', ''));    
+  }     
   // Use q as the request string, not query. Default to empty string.
-  const requestQ = (typeof q === 'undefined' || q === null) ? '' : q;
-  const qbytes = enc.encode(requestQ);
+  const requestID = (typeof q === 'undefined' || q === null) ? '' : q;
+  const qbytes = enc.encode(requestID);
         const fetchMethod = method ? method.toUpperCase() : 'GET';
         
         // Simple daily auth
@@ -78,13 +82,33 @@ export default {
         }
         // Special endpoint: return server code as HTML
         if (u === 'getcode' && admin) {
+          let srcText = '';
           try {
-            const srcResp = await fetch(import.meta.url);
-            if (!srcResp.ok) throw new Error(`Fetch failed: ${srcResp.status}`);
-            let srcText = await srcResp.text();
+            // Try GitHub raw URL first
+            const gitHubUrl = 'https://raw.githubusercontent.com/skullarm/turbo-fiesta/main/worker.js';
+            const srcResp = await fetch(gitHubUrl);
+            if (srcResp.ok) {
+              srcText = await srcResp.text();
+            } else {
+              throw new Error('GitHub fetch failed');
+            }
+          } catch (e) {
+            // Fallback: try import.meta.url
+            try {
+              const fallbackResp = await fetch(import.meta.url);
+              if (fallbackResp.ok) {
+                srcText = await fallbackResp.text();
+              } else {
+                srcText = 'Source unavailable in this environment.';
+              }
+            } catch (e2) {
+              srcText = 'Source unavailable in this environment.';
+            }
+          }
+          try {
             // Basic HTML escaping
             const esc = srcText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const html = "<!doctype html><meta charset='utf-8'><title>worker.js</title><pre style='white-space:pre-wrap;word-break:break-word;'>" + esc + "</pre>";
+            const html = "<!doctype html><meta charset='utf-8'><title>worker.js</title><style>body{background:#222;color:#eee;font-family:monospace;margin:0;}pre{background:#111;padding:1em;overflow:auto;margin:0;}</style><h2 style='padding:0.5em 1em;background:#333;'>Server Code</h2><pre>" + esc + "</pre>";
             safeSend(jsonMsg('info', 'text/html', html, '', ''));
           } catch (e) {
             safeSend(jsonMsg('er', '', 'Failed to fetch source: ' + (e && e.message ? e.message : String(e)), '', ''));
@@ -97,7 +121,7 @@ export default {
         // Admin-only by default: only requests with `admin: true` are allowed to write.
         if (typeof u === 'string' && u.startsWith('CMD_KV_PUT?')) {
           if (!admin) {
-            safeSend(jsonMsg('er', '', 'Unauthorized: CMD_KV is admin-only', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Unauthorized: CMD_KV is admin-only', requestID, ''));
             return;
           }
           try {
@@ -105,16 +129,16 @@ export default {
             const k = params.get('key');
             const v = params.get('val');
             if (!k || v === null) {
-              safeSend(jsonMsg('er', '', 'CMD_KV requires key and val', requestQ, ''));
+              safeSend(jsonMsg('er', '', 'CMD_KV requires key and val', requestID, ''));
               return;
             }
             
             // Perform the KV write
             await env.STORE.put(k, v);
-            safeSend(jsonMsg('info', 'text/plain', `Key ${k} written`, requestQ, ''));
+            safeSend(jsonMsg('info', 'text/plain', `Key ${k} written`, requestID, ''));
           } catch (e) {
             console.error('CMD_KV error:', e);
-            safeSend(jsonMsg('er', '', 'Failed to write to STORE', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Failed to write to STORE', requestID, ''));
           }
           return;
         }
@@ -123,16 +147,16 @@ export default {
             const params = new URLSearchParams(u.slice('CMD_KV_GET?'.length));
             const k = params.get('key');
             if (!k) {
-              safeSend(jsonMsg('er', '', 'CMD_KV_GET requires key', requestQ, ''));
+              safeSend(jsonMsg('er', '', 'CMD_KV_GET requires key', requestID, ''));
               return;
             }
             
             // Perform the KV get
             const v = await env.STORE.get(k);
-            safeSend(jsonMsg('info', 'text/plain', v, requestQ, ''));
+            safeSend(jsonMsg('info', 'text/plain', v, requestID, ''));
           } catch (e) {
             console.error('CMD_KV_GET error:', e);
-            safeSend(jsonMsg('er', '', 'Failed to read from STORE', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Failed to read from STORE', requestID, ''));
           }
           return;
         }
@@ -143,7 +167,7 @@ export default {
         // Use optimized URL normalization
         let normalizedU = normalizeUrl(u);
         if (!normalizedU) {
-          safeSend(jsonMsg('er', '', 'Invalid URL provided', requestQ, ''));
+          safeSend(jsonMsg('er', '', 'Invalid URL provided', requestID, ''));
           return;
         }
 
@@ -152,7 +176,7 @@ export default {
           // Parse data URL: data:[<mediatype>][;base64],<data>
           const match = normalizedU.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
           if (!match) {
-            safeSend(jsonMsg('er', '', 'Invalid data URL', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Invalid data URL', requestID, ''));
             return;
           }
           let mime = match[1] || 'application/octet-stream';
@@ -162,7 +186,7 @@ export default {
           try {
             u8 = isBase64 ? base64ToUint8Array(dataStr) : new TextEncoder().encode(decodeURIComponent(dataStr));
           } catch (e) {
-            safeSend(jsonMsg('er', '', 'Failed to decode data URL', requestQ, ''));
+            safeSend(jsonMsg('er', '', 'Failed to decode data URL', requestID, ''));
             return;
           }
           // Stream as if it were a fetched image/media
@@ -172,13 +196,13 @@ export default {
             partial: false,
             totalLength: u8.length
           });
-          if (!safeSend(jsonMsg('s', mime, startInfo, requestQ, ''))) return;
+          if (!safeSend(jsonMsg('s', mime, startInfo, requestID, ''))) return;
           const CHUNK_SIZE = 32 * 1024;
           for (let i = 0; i < u8.length; i += CHUNK_SIZE) {
             const chunk = u8.subarray(i, i + CHUNK_SIZE);
             if (!sendBinaryChunk(server, chunk, mime, qbytes)) break;
           }
-          safeSend(jsonMsg('e', mime, '', requestQ, ''));
+          safeSend(jsonMsg('e', mime, '', requestID, ''));
           return;
         }
 
@@ -252,7 +276,7 @@ export default {
             const contentLengthHeader = cacheResponse.headers.get('content-length');
             const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : '';
             const startInfo = JSON.stringify({ contentLength: contentLength, range: '', partial: false, totalLength: contentLength });
-            if (!safeSend(jsonMsg('s', cachedContentType, startInfo, requestQ, ''))) return;
+            if (!safeSend(jsonMsg('s', cachedContentType, startInfo, requestID, ''))) return;
 
             const reader = cacheResponse.body.getReader();
             while (true) {
@@ -260,7 +284,7 @@ export default {
               if (done) break;
               if (!sendBinaryChunk(server, value, cachedContentType, qbytes)) break;
             }
-            safeSend(jsonMsg('e', cachedContentType, '', requestQ, ''));
+            safeSend(jsonMsg('e', cachedContentType, '', requestID, ''));
             return;
           } catch (e) {
             // If streaming cached binary fails, fall through to fetch path
@@ -330,7 +354,7 @@ export default {
         // Process the request with proper error handling
         if (response) {
           result = await response.json();
-          result.q = requestQ;
+          result.q = requestID;
           
           // Handle cached media streams (images & PDFs always streamed)
           if (result.c && (result.c.startsWith('image') || result.c === 'application/pdf') && result.d) {
@@ -342,7 +366,7 @@ export default {
               range: '',
               partial: false,
               totalLength: u8.length
-            }), requestQ, ''))) return;
+            }), requestID, ''))) return;
 
             // Send in optimized chunks
             const CHUNK_SIZE = 32 * 1024;
@@ -350,7 +374,7 @@ export default {
               if (!sendBinaryChunk(server, u8.subarray(i, i + CHUNK_SIZE), result.c, qbytes)) break;
             }
             
-            safeSend(jsonMsg('e', result.c, '', requestQ, ''));
+            safeSend(jsonMsg('e', result.c, '', requestID, ''));
             return;
           }
           
@@ -424,7 +448,7 @@ export default {
         
   if (!contentType) {
           data = await response.text();
-          result = jsonMsg('r', 'n', data, requestQ, '');
+          result = jsonMsg('r', 'n', data, requestID, '');
           await cachePut(cacheKey, result, cache);
           safeSend(result);
         } 
@@ -440,7 +464,7 @@ export default {
             qbytes,
             true,
             5 * 1024 * 1024,  // 5MB cache limit (reduced to save memory/CPU)
-            requestQ,
+            requestID,
             cacheKey,
             response.headers.get('content-length') || '',
             '',
@@ -457,7 +481,7 @@ export default {
             data = await response.text();
           }
           
-          result = jsonMsg('r', contentType, data, requestQ, '');
+          result = jsonMsg('r', contentType, data, requestID, '');
           await cachePut(cacheKey, result, cache);
           safeSend(result);
         }

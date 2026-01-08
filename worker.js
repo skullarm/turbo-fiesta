@@ -504,7 +504,7 @@ export default {
           errorMessage = 'Invalid range request';
         }
         
-        let errorMsg = jsonMsg('er', contentType, errorMessage, requestQ, '');
+        let errorMsg = jsonMsg('er', contentType, errorMessage, requestID, '');
         try { safeSend(errorMsg); } catch {}
       } finally {
         // Ensure timers and controllers are cleaned up to avoid leaks

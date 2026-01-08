@@ -158,7 +158,7 @@ export default {
             }
             
             // Perform the KV get
-            const v = await env.STORE.get(k);
+            const v = await env.STORE.GET(k);
             safeSend(jsonMsg('info', 'text/plain', v, requestID, ''));
           } catch (e) {
             console.error('CMD_KV_GET error:', e);

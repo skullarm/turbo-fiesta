@@ -64,7 +64,7 @@ export default {
   if(clrCache==="clr_cache"){
     safeSend(jsonMsg('info', 'text/plain', 'clr_cache', q || '', ''));
   }     
-}catch(e){} 
+}catch(e){safeSend(jsonMsg('er', '', `KV STORE error ${e.message}`, q || '', '')); return;} 
   // Use q as the request string, not query. Default to empty string.
   const requestID = (typeof q === 'undefined' || q === null) ? '' : q;
   const qbytes = enc.encode(requestID);

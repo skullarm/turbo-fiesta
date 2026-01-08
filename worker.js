@@ -663,7 +663,7 @@ function uint8ToBase64(u8) {
 // Helper: stream media and cache if under limit
 // Accept contentLength as an argument (may be empty string if not available)
 // Accepts additional args: rangeUsed (string), partial (bool), totalLength (number)
-async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestQ, cacheKey, contentLength, rangeUsed = '', partial = false, totalLength = 0) {
+async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestID, cacheKey, contentLength, rangeUsed = '', partial = false, totalLength = 0) {
   // Don't collect chunks unless we're sure we'll cache
   const parsedContentLength = parseInt(contentLength, 10);
   const shouldCollectChunks = cacheChunks && (!contentLength || parsedContentLength <= cacheLimit);
@@ -694,12 +694,12 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
     expectedDuration: (contentType.startsWith('video') || contentType.startsWith('audio')) && Number.isFinite(parsedContentLength) ? 
       Math.ceil(parsedContentLength / 128000) : 
       undefined
-  }), requestQ, ''))) {
+  }), requestID, ''))) {
     return;
   }
 
   if (!response.body) {
-    localSafeSend(jsonMsg('e', contentType, '', requestQ, ''));
+    localSafeSend(jsonMsg('e', contentType, '', requestID, ''));
     return;
   }
 
@@ -747,7 +747,7 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
     }
 
     // finished streaming; send end message
-    localSafeSend(jsonMsg('e', contentType, '', requestQ, ''));
+    localSafeSend(jsonMsg('e', contentType, '', requestID, ''));
 
     // If we collected chunks and total size within limit, cache it
     if (chunks && streamedLength > 0 && streamedLength <= cacheLimit) {
@@ -760,7 +760,7 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
           pos += c.length;
         }
         const b64 = uint8ToBase64(out);
-        const result = jsonMsg('r', contentType, b64, requestQ, '');
+        const result = jsonMsg('r', contentType, b64, requestID, '');
         await cachePut(cacheKey, result, caches.default);
       } catch (e) {
         // caching failure is non-fatal

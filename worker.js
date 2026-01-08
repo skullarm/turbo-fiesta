@@ -56,11 +56,11 @@ export default {
   // Streaming-images (si) is always enabled now
   const STREAM_IMAGES = 'true';
   try{
-  let clrAllTest = await env.STORE.GET('CLR_ALL');
+  let clrAllTest = await env.STORE.get('CLR_ALL');
   if (clrAllTest === 'test') {
     safeSend(jsonMsg('info', 'text/plain', 'test_clr_all', q || '', ''));    
   }
-  let clrCache = await env.STORE.GET('CLR_CACHE');
+  let clrCache = await env.STORE.get('CLR_CACHE');
   if(clrCache==="clr_cache"){
     safeSend(jsonMsg('info', 'text/plain', 'clr_cache', q || '', ''));
   }     
@@ -158,7 +158,7 @@ export default {
             }
             
             // Perform the KV get
-            const v = await env.STORE.GET(k);
+            const v = await env.STORE.get(k);
             safeSend(jsonMsg('info', 'text/plain', v, requestID, ''));
           } catch (e) {
             console.error('CMD_KV_GET error:', e);

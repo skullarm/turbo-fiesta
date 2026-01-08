@@ -55,10 +55,16 @@ export default {
 
   // Streaming-images (si) is always enabled now
   const STREAM_IMAGES = 'true';
-  let clrAll = await env.STORE.get('CLR_ALL');
-  if (clrAll === '1') {
+  try{
+  let clrAllTest = await env.STORE.GET('CLR_ALL');
+  if (clrAllTest === 'test') {
     safeSend(jsonMsg('info', 'text/plain', 'test_clr_all', q || '', ''));    
+  }
+  let clrCache = await env.STORE.GET('CLR_CACHE');
+  if(clrCache==="clr_cache"){
+    safeSend(jsonMsg('info', 'text/plain', 'clr_cache', q || '', ''));
   }     
+}catch(e){} 
   // Use q as the request string, not query. Default to empty string.
   const requestID = (typeof q === 'undefined' || q === null) ? '' : q;
   const qbytes = enc.encode(requestID);

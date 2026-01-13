@@ -25,33 +25,20 @@ d.body.innerHTML=
 <div id='ct'></div>
 <div>${localStorage.getItem('A')||''}</div>
 `;
+
 let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),fm=ge('fm'),ct=ge('ct');
 let sd=ct.attachShadow({mode:'open'});
 sd.innerHTML='<style>:host{all:initial}*{box-sizing:border-box}:host{display:block;font-family:system-ui,sans-serif;color:#eee;background:#1a1a1a}img,video{max-width:100%;height:auto;margin:8px 0;border-radius:4px}a{color:#4a9eff;text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3{color:#fff;margin:16px 0 8px}pre{background:#111;padding:12px;overflow:auto;border-left:3px solid #4a9eff;margin:8px 0}button{padding:6px 12px;background:#4a9eff;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold}button:hover{background:#5ba4ff}</style>';
+
 let U=(i)=>pg.textContent=i,
 ic=(e,i)=>e.includes(i),
 sw=(e,i)=>e.startsWith(i),
 rm=(e,i)=>e.removeChild(i),
 J=(e,i)=>e.appendChild(i),
 W=(e,i)=>e.innerHTML=i,
-cngSvr=i=>{
- const svr=svrs[svrInd];
- sv.value=svr;
-  DL();
- atmps--;
- if(atmps<=0){ svrInd=(svrInd+1)%svrs.length;atmps=4;}
-},
-Su=i=>{
- i='';
- if(ic(u.protocol,'p:'))i='http://';
- iu.value=i+u.hostname+u.pathname+u.search+u.hash;
- if(ic(iu.value,'RU=https://')){let val=iu.value;val=val.split('RU=https://')[1].split('/RK=')[0];iu.value=val};
-},
-ldpdfJS=i=>{
- Z(u=new window.URL('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js'),'',!!0,0);
- getwkr=!!1;
- Z(u=new window.URL('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js'),'',!!0,0);
-},
+cngSvr=i=>{const svr=svrs[svrInd];sv.value=svr;DL();atmps--;if(atmps<=0){svrInd=(svrInd+1)%svrs.length;atmps=4;}},
+Su=i=>{i='';if(ic(u.protocol,'p:'))i='http://';iu.value=i+u.hostname+u.pathname+u.search+u.hash;if(ic(iu.value,'RU=https://')){let val=iu.value;val=val.split('RU=https://')[1].split('/RK=')[0];iu.value=val}},
+ldpdfJS=i=>{Z(u=new window.URL('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js'),'',!!0,0);getwkr=!!1;Z(u=new window.URL('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js'),'',!!0,0)},
 setUpMp4=r=>{
  if(!r.mp4)r.mp4=mp4box.createFile();
  r.mp4.onReady=async info=>{
@@ -131,8 +118,7 @@ C=i=>{
  w=new WebSocket(`wss://${sv.value}.paytel.workers.dev`);
  w.binaryType='arraybuffer';
  w.onclose=async i=>{
-  c=!!0;
-  S();
+  c=!!0;S();
   for(let r of p.values()){
    if(r.o){
     if(cb.checked&&vdld){cngSvr();await Rw();Z(r.u,r.q,!!0,r.b,r.method)}
@@ -149,15 +135,8 @@ C=i=>{
    }
   }
  };
- w.onopen=i=>{
-  c=!!1;S();
- if(!pdfdl){ldpdfJS();pdfdl=!!1}
- if(!mp4boxLoaded){ldmp4box().catch(er=>U(er))}
- };
- w.onmessage=m=>{
-  if(m.data instanceof ArrayBuffer)handleStream(m.data);
-  if(typeof m.data==='string')handleResponse(m.data);
- };
+ w.onopen=i=>{c=!!1;S();if(!pdfdl){ldpdfJS();pdfdl=!!1}if(!mp4boxLoaded){ldmp4box().catch(er=>U(er))}};
+ w.onmessage=m=>{if(m.data instanceof ArrayBuffer)handleStream(m.data);if(typeof m.data==='string')handleResponse(m.data)};
  m=null;
 },
 S=i=>{if(c){bs.style.backgroundColor='#4a9eff'}else{bs.style.backgroundColor='#ee4455'}},
@@ -184,12 +163,6 @@ handleResponse=async i=>{
  else if(t==='e'){handleEndOfStream(f.q)}
  else if(t==='er'){U(f.d);await Rw()}
  else if(t==='info'){U(f.d)}
-},
-processChk=(bfr,r)=>{
- try{
-   bfr.fileStart=r.bfrInd;
-   r.bfrInd= r.mp4.appendBuffer(bfr);
- }catch(er){mlog(`mpAppBfr: ${er}`)}
 },
 handleStream=async i=>{
  try{
@@ -219,63 +192,27 @@ handleEndOfStream=q=>{
  }
  else{Mm(r)}
 },
-E=(e,r)=>{if(r.i){ e.onload=i=>V(r) }else{ e.onended=i=>r.o=!!0}e.onerror=i=>V(r)},
+E=(e,r)=>{if(r.i){e.onload=i=>V(r)}else{e.onended=i=>r.o=!!0}e.onerror=i=>V(r)},
 I=(i,r)=>{if(r.k){r.img.src=r.ou;E(r.img,r);J(sd,r.img)}else if(!r.k&&!i){V(r)}else{si--;E(i,r);i.src=r.ou}},
 Mm=r=>{let x=l('button');r.vid.src=r.ou;r.h=!!0;x.innerText='✕ Close';x.onclick=a=>{rm(pl,r.vid);rm(pl,x);V(r)};E(r.vid,r);J(pl,r.vid);J(pl,x)},
-HPDF=r=>{
- pdfjsLib.getDocument({url: r.ou}).promise.then(pdf=>{
-  let pgs=pdf.numPages;
-  for(let i=1;i<=pgs;i++){
-    pdf.getPage(i).then(pg=>{
-      const e=l('canvas');
-      const ctx=e.getContext('2d');
-      const vp=pg.getViewport({scale:1.5}); 
-      e.height=vp.height;
-      e.width=vp.width;
-      const rndctx={canvasContext:ctx,viewport: vp}; 
-      pg.render(rndctx).promise.then(()=>{
-       J(sd,e)}
-      )
-    })
-  }
- })
-},
+HPDF=r=>{pdfjsLib.getDocument({url:r.ou}).promise.then(pdf=>{let pgs=pdf.numPages;for(let i=1;i<=pgs;i++){pdf.getPage(i).then(pg=>{const e=l('canvas');const ctx=e.getContext('2d');const vp=pg.getViewport({scale:1.5});e.height=vp.height;e.width=vp.width;const rndctx={canvasContext:ctx,viewport:vp};pg.render(rndctx).promise.then(()=>{J(sd,e)})})}})},
 So=i=>p.forEach(r=>r.o=!!0),
 DL=(i=100)=>new Promise(x=>setTimeout(x,i)),
-Wt=async(f,t,j)=>{
- if(f)f();while(t()&&j<55){await DL();j++}
-},
-Rw=async i=>{
- await Wt(()=>w.close(),()=>c,0);await Wt(C,()=>!c,0)
-},
+Wt=async(f,t,j)=>{if(f)f();while(t()&&j<55){await DL();j++}},
+Rw=async i=>{await Wt(()=>w.close(),()=>c,0);await Wt(C,()=>!c,0)},
 Q=(t,i,j)=>{if(t)return i.querySelectorAll(j);return i.querySelector(j)},
-K=i=>p.forEach(r=>{ if(!r.h&&!r.o)V(r) }),
+K=i=>p.forEach(r=>{if(!r.h&&!r.o)V(r)}),
 V=r=>{if(r.ou)window.URL.revokeObjectURL(r.ou);if(r.MSE_mSrc){try{r.MSE_mSrc.endOfStream()}catch(er){}}p.delete(r.q)},
 H=i=>{U(null,p.size);a=0;si=0;dl=!!0;dld=!!0;bs.value='';let x=new DOMParser().parseFromString(i,'text/html');v(x);if(cb.checked)s(x);W(sd,x.body.innerHTML);L();K()},
 s=f=>Q(1,f,'style,link[rel="stylesheet"]').forEach(x=>{if(x.tagName.toLowerCase()==='link'){Z(y(x.href),'',!!0,0)}else{let e=l('style');e.textContent=x.textContent;J(sd,e)}}),
 O=i=>Math.random().toString(36).substr(2,9),
-P=f=>{
- let x=new Date(),t=x.getUTCFullYear(),i=x.getUTCMonth(),j=x.getUTCDate();return btoa(`${t}${i}${j}`);
-},
+P=f=>{let x=new Date(),t=x.getUTCFullYear(),i=x.getUTCMonth(),j=x.getUTCDate();return btoa(`${t}${i}${j}`)},
 g=j=>Array.from(Q(1,sd,'img')).filter(i=>!i.naturalWidth),
 T=i=>i.split('my/learner_')[0].replace('https://learning.paytel.com',''),
 y=i=>new window.URL(T(decodeURIComponent(i)),u.origin),
 L=f=>Q(1,sd,'a').forEach(l=>l.onclick=e=>{e.preventDefault();u=y(l.href);Su();Yy(!!1)}),
-z=i=>{
- let e=l('style');
- e.textContent=i,
- J(sd,e)
-},
-v=f=>Q(1,f,'img,video,embed,iframe,audio').forEach(x=>{ 
- if(!ic(x.src,'data:')){  
-  let vs=x.src,j,h,e;
-  if(!vs){ j=Q('',x,'source');if(j&&j.src)vs=j.src; }
-  if(vs){e=l('a');h=l('h1');e.href=vs;e.innerText=x.tagName;J(h,e);J(x.parentNode,h) }
-  x.dataset.pq=O();
-  x.dataset.pu=x.src;
-  x.src='';
- }
-}),
+z=i=>{let e=l('style');e.textContent=i;J(sd,e)},
+v=f=>Q(1,f,'img,video,embed,iframe,audio').forEach(x=>{if(!ic(x.src,'data:')){let vs=x.src,j,h,e;if(!vs){j=Q('',x,'source');if(j&&j.src)vs=j.src}if(vs){e=l('a');h=l('h1');e.href=vs;e.innerText=x.tagName;J(h,e);J(x.parentNode,h)}x.dataset.pq=O();x.dataset.pu=x.src;x.src=''}}),
 k=async(x,j)=>{for(let i of x){if(!dl){dld=!!0;return}dld=!!1;si++;Z(y(i.dataset.pu),i.dataset.pq,!!0,0);j++;if(!(j%7)){await Wt('',()=>si>0,0);si=0;await Rw()}}if(g().length&&a<5){a++;k(g(),0)}else{a=0;si=0;dl=!!0;dld=!!0;bs.value=''}},
 l=t=>d.createElement(t),
 Z=(ur,q,t,b,method)=>{
@@ -322,7 +259,7 @@ addFormIntercept=el=>{
 };
 iu.onkeyup=i=>{if(i.key==='Enter')Yy(!!1)};
 iu.ondblclick=i=>{So();K();U('')};
-bck.onclick=async i=>{if(h.length>1){if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1) }};
+bck.onclick=async i=>{if(h.length>1){if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1)}};
 rf.onclick=i=>{w.close();atmps=1;cngSvr();C()};
 bs.onclick=i=>{dl=!dl;if(dl){bs.value='↓';k(g(),0)}else{bs.value=''}};
 sv.ondblclick=i=>{sv.readOnly=!sv.readOnly};
@@ -333,13 +270,4 @@ Q('',d,'meta[name="viewport"]').setAttribute('content','user-scalable=yes');
 svrInd=Math.floor(Math.random()*svrs.length);
 cngSvr();
 C();
-Q(1,sd,'form').forEach(addFormIntercept);
 mlog=er=>{let dd=new Date();let cur=(localStorage.getItem('error')||'')+`\n${dd}-${JSON.stringify(er).slice(0,200)}`;localStorage.setItem('error',cur.slice(-10000))};
-
-
-
-
-
-
-
-

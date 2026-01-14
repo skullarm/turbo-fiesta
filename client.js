@@ -52,37 +52,60 @@ ldpdfJS=i=>{
  getwkr=!!1;
  Z(u=new window.URL('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js'),'',!!0,0);
 },
-setUpMp4=r=>{
- if(!r.mp4)r.mp4=mp4box.createFile();
- r.mp4.onReady=async info=>{
+setUpMp4=async r=>{
+ // ensure mp4box library is loaded
+ if(!mp4box){ try{ await ldmp4box() }catch(er){mlog(`ldmp4box: ${er.message||er}`); throw er} }
+ // return a promise that resolves when mp4box onReady has completed and MSE is ready
+ return new Promise((resolve,reject)=>{
   try{
-   r.codec=info.tracks[0].codec;
-   r.trackId=info.tracks[0].id;
-   mlog(`MP4 Ready: codec=${r.codec}`);
-   r.mp4.setSegmentOptions(r.trackId,'vid',segOptions);
-   r.mp4.initializeSegmentation();
-   r.mp4.start();
-   await setUpMSE(r);
-   mlog(`MSE Setup complete`);
-  }catch(er){mlog(`setUpMp4 onReady: ${er.message||er}`)}
- };
- r.mp4.onSegment=(id,user,buffer,sampleNumber,last)=>{
-  try{
-   if(!r.srcBfr||r.srcBfr.updating)r.Q.push(buffer);
-   else r.srcBfr.appendBuffer(buffer);
-   mlog(`Segment ${sampleNumber} (last=${last}): ${buffer.byteLength} bytes`);
-   if(last)r.mp4.flush();
-  }catch(er){mlog(`onSegment: ${er.message||er}`)}
- };
- r.mp4.onError=er=>{mlog(`mp4box error: ${er}`)};
+   if(!r.mp4)r.mp4=mp4box.createFile();
+   r.mp4.onReady=async info=>{
+    try{
+     r.codec=info.tracks[0].codec;
+     r.trackId=info.tracks[0].id;
+     mlog(`MP4 Ready: codec=${r.codec}`);
+     r.mp4.setSegmentOptions(r.trackId,'vid',segOptions);
+     r.mp4.initializeSegmentation();
+     r.mp4.start();
+     await setUpMSE(r);
+     mlog(`MSE Setup complete`);
+
+     // If binary chunks arrived before mp4 was ready, feed them now so mp4box can parse init segment
+     try{
+      if(r.f && r.f.length){
+       mlog(`Draining ${r.f.length} queued chunk(s) into mp4box`);
+       for(const chunk of r.f){
+        try{
+         const ab = (chunk.buffer && (chunk.byteOffset||chunk.byteOffset===0)) ? chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) : (new Uint8Array(chunk)).buffer;
+         processChk(ab, r);
+        }catch(er){mlog(`drain chunk: ${er.message||er}`)}
+       }
+      }
+     }catch(er){mlog(`drain queued chunks: ${er.message||er}`)}
+
+     resolve();
+    }catch(er){mlog(`setUpMp4 onReady: ${er.message||er}`);reject(er)}
+   };
+   r.mp4.onSegment=(id,user,buffer,sampleNumber,last)=>{
+    try{
+     if(!r.srcBfr||r.srcBfr.updating)r.Q.push(buffer);
+     else r.srcBfr.appendBuffer(buffer);
+     mlog(`Segment ${sampleNumber} (last=${last}): ${buffer.byteLength} bytes`);
+     if(last)r.mp4.flush();
+    }catch(er){mlog(`onSegment: ${er.message||er}`)}
+   };
+   r.mp4.onError=er=>{mlog(`mp4box error: ${er}`);reject(er)};
+  }catch(er){mlog(`setUpMp4: ${er.message||er}`);reject(er)}
+ })
 },
+
 ldmp4box=async i=>{
  try{
   const b=new Blob([localStorage.getItem('mp4box')||''],{type:'application/javascript'});
   const url=window.URL.createObjectURL(b);
   const mod=await import(url);
   mp4box=mod.default||mod;
-  mp4boxLoaded=!!0;
+  mp4boxLoaded=!!1;
   mlog('mp4box loaded');
  }catch(er){mlog(`ldmp4box: ${er.message||er}`)}
 },
@@ -96,7 +119,11 @@ setUpMSE=async r=>{
    
    const onSourceOpen=async ()=>{
     try{
-     let codec=`${r.c}; codecs="${r.codec}"`;
+     if(!r.codec){mlog('onSourceOpen: no codec available');reject(new Error('No codec'));
+      return}
+     // drop any params from Content-Type (charset etc.) so MediaSource.isTypeSupported receives a clean mime
+     let mime = (r.c||'video/mp4').split(';')[0].trim();
+     let codec=`${mime}; codecs="${r.codec}"`;
      mlog(`Testing codec: ${codec}`);
      if(!MediaSource.isTypeSupported(codec)){mlog(`Codec NOT supported: ${codec}`);reject(new Error('Codec not supported'));return}
      r.srcBfr=r.MSE_mSrc.addSourceBuffer(codec);
@@ -111,7 +138,9 @@ setUpMSE=async r=>{
     }catch(er){mlog(`onSourceOpen: ${er.message||er}`);reject(er)}
    };
    
-   r.MSE_mSrc.addEventListener('sourceopen',onSourceOpen,{once:!!0});
+   r.MSE_mSrc.addEventListener('sourceopen',onSourceOpen,{once:!!1});
+   // If the MediaSource is already open, call handler immediately
+   try{if(r.MSE_mSrc.readyState==='open'){setTimeout(()=>onSourceOpen(),0)}}catch(er){}
    setTimeout(()=>{if(r.srcBfr===null)reject(new Error('MediaSource timeout'))},5000);
   }catch(er){mlog(`setUpMSE: ${er.message||er}`);reject(er)}
  })
@@ -172,7 +201,7 @@ handleResponse=async i=>{
   if(!r.tl){let meta=JSON.parse(f.d);r.tl=meta.totalLength;r.mb=(r.tl/1048576).toFixed(2)}
   if(sw(r.c,'video')){
    r.usesMSE=shouldUseMSE(r);
-   if(r.usesMSE){try{setUpMp4(r)}catch(er){mlog(`setUpMp4 init: ${er}`)}}
+   if(r.usesMSE){try{await setUpMp4(r)}catch(er){mlog(`setUpMp4 init: ${er}`)}}
    else{r.vid=l('video');r.vid.controls=!!0}
    r.v=!!1;vdld=!!1;
   }
@@ -198,7 +227,11 @@ handleStream=async i=>{
   r.f.push(f);r.b+=f.length;
   if(r.usesMSE){
    try{
-    if(r.mp4){r.mp4.appendBuffer(f.buffer||new ArrayBuffer(f))}
+    if(r.mp4){
+     // ensure exact ArrayBuffer for this slice and set fileStart via processChk
+     let ab = (f.buffer && (f.byteOffset||f.byteOffset===0)) ? f.buffer.slice(f.byteOffset, f.byteOffset + f.byteLength) : (new Uint8Array(f)).buffer;
+     processChk(ab, r);
+    }
    }catch(er){mlog(`mp4.appendBuffer: ${er.message||er}`)}
   }
   if(!dld)U(`${((r.b/r.tl)*100).toFixed(2)}% of ${r.mb}MB (${(r.b/1024/1024).toFixed(1)}MB)`);
@@ -207,7 +240,7 @@ handleStream=async i=>{
 handleEndOfStream=q=>{
  let r=p.get(q);
  if(!r)return;
- if(r.mp4)r.mp4Done=!!0;
+ if(r.mp4)r.mp4Done=!!1; // mark as complete so MSE endOfStream can trigger when buffers drain
  r.ou=window.URL.createObjectURL(new Blob(r.f,{type:r.c}));
  if(r.i){I(Q('',sd,`img[data-pq="${q}"]`),r)}
  else if(r.pdf){try{HPDF(r)}catch(er){U(er)}}
@@ -219,6 +252,7 @@ handleEndOfStream=q=>{
  }
  else{Mm(r)}
 },
+
 E=(e,r)=>{if(r.i){ e.onload=i=>V(r) }else{ e.onended=i=>r.o=!!0}e.onerror=i=>V(r)},
 I=(i,r)=>{if(r.k){r.img.src=r.ou;E(r.img,r);J(sd,r.img)}else if(!r.k&&!i){V(r)}else{si--;E(i,r);i.src=r.ou}},
 Mm=r=>{let x=l('button');r.vid.src=r.ou;r.h=!!0;x.innerText='✕ Close';x.onclick=a=>{rm(pl,r.vid);rm(pl,x);V(r)};E(r.vid,r);J(pl,r.vid);J(pl,x)},
@@ -286,7 +320,7 @@ Z=(ur,q,t,b,method)=>{
  }
  if(!q)q=O();
  if(!method)method='GET';
- if(!p.has(q))p.set(q,{q:q,u:uu,f:[],k:t,b:b,vid:l('video'),img:null,mp4:null,codec:null,trackId:null,MSE_mSrc:null,srcBfr:null,bfrInd:0,Q:[],mp4Done:!!1,usesMSE:!!1,processing:!!1,method:method});
+ if(!p.has(q))p.set(q,{q:q,u:uu,f:[],k:t,b:b,vid:l('video'),img:null,mp4:null,codec:null,trackId:null,MSE_mSrc:null,srcBfr:null,bfrInd:0,Q:[],mp4Done:!!0,usesMSE:!!0,processing:!!1,method:method});
  let msg={u:uu,q:q,au:P(),os:b,admin:!!0,method:method};
  if(method!=='GET'){msg.body=''}
  w.send(JSON.stringify(msg));
@@ -319,7 +353,8 @@ addFormIntercept=el=>{
   }
  }
  Q(1,el,'form').forEach(addFormIntercept);
-};
+},
+mlog=er=>{let dd=new Date();let cur=(localStorage.getItem('error')||'')+`\n${dd}-${JSON.stringify(er).slice(0,200)}`;localStorage.setItem('error',cur.slice(-10000))};
 iu.onkeyup=i=>{if(i.key==='Enter')Yy(!!1)};
 iu.ondblclick=i=>{So();K();U('')};
 bck.onclick=async i=>{if(h.length>1){if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1) }};
@@ -331,10 +366,10 @@ hide.onclick=i=>{overlay.style.display='flex';mute(!!1)};
 overlay.ondblclick=i=>{overlay.style.display='none';mute(!!0)};
 Q('',d,'meta[name="viewport"]').setAttribute('content','user-scalable=yes');
 svrInd=Math.floor(Math.random()*svrs.length);
+ldmp4box().catch(er=>mlog(er));
 cngSvr();
 C();
 Q(1,sd,'form').forEach(addFormIntercept);
-mlog=er=>{let dd=new Date();let cur=(localStorage.getItem('error')||'')+`\n${dd}-${JSON.stringify(er).slice(0,200)}`;localStorage.setItem('error',cur.slice(-10000))};
 
 
 

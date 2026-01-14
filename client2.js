@@ -5,7 +5,7 @@ const svrs=['osric','wit','offal','bilboes'];
 const chunkSize=50*1024*1024,segOptions={nbSamples:250},MP4_MSE_THRESHOLD=50*1024*1024;
 d.body.innerHTML=
 `
-<div id='overlay' style='display:none;position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,0.8);z-index:100000999;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center'><div style='background:#222;color:#eee;padding:2em;border-radius:8px;text-align:center;max-width:500px'><h2>Media Paused</h2><p>Double-click to resume</p></div></div>
+<div id='overlay' style='display:none;position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,0.8);z-index:100000999;font-family:system-ui,sans-serif;align-items:center;justify-content:center'><div style='background:#222;color:#eee;padding:2em;border-radius:8px;text-align:center;max-width:500px'><h2>Media Paused</h2><p>Double-click to resume</p></div></div>
 <div id='pl' style='background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center'></div>
 <div style='position:sticky;top:0;z-index:100000099;background:#2a2a2a;color:#eee;padding:8px;font-family:system-ui,sans-serif;border-bottom:1px solid #444'>
  <div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'>

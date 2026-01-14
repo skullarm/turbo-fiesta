@@ -23,7 +23,6 @@ d.body.innerHTML=
  <div style='margin-top:8px;padding:8px;background:#1a1a1a;border-radius:4px;font-size:12px'><span id='pg' style='font-family:monospace'></span></div>
 </div>
 <div id='ct'></div>
-<div>${localStorage.getItem('A')||''}</div>
 `;
 let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),fm=ge('fm'),ct=ge('ct');
 let sd=ct.attachShadow({mode:'open'});

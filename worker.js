@@ -345,11 +345,14 @@ export default {
           redirect: 'manual' // handle redirects manually to avoid subrequest chains
         };
 
-        // Handle media resumption
+        // Handle media resumption with Range requests
         if ((os > 0 || oe !== null) && normalizedU.match(/\.(mp4|webm|mp3|wav|ogg)$/i)) {
-          fetchOptions.headers['Range'] = oe !== null && !isNaN(oe) ? 
-            `bytes=${os}-${oe}` : 
-            `bytes=${os}-`;
+          if(os > 0){
+            fetchOptions.headers['Range'] = oe !== null && !isNaN(oe) ? 
+              `bytes=${os}-${oe}` : 
+              `bytes=${os}-`;
+            mlog(`Resume: requesting bytes ${os}${oe ? '-'+oe : '-end'}`);
+          }
         }
 
         // Add body for POST/PUT/PATCH requests

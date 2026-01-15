@@ -1,0 +1,75 @@
+/* ===================== MSE / MP4 FIXES BEGIN ===================== */
+
+/* NEW: strict append queue */
+function safeAppend(r, buffer) {
+  try {
+    if (
+      !r.srcBfr ||
+      !r.MSE_mSrc ||
+      r.MSE_mSrc.readyState !== 'open' ||
+      r.srcBfr.updating
+    ) {
+      r.Q.push(buffer);
+      return;
+    }
+    r.srcBfr.appendBuffer(buffer);
+  } catch (e) {
+    mlog(`safeAppend failed: ${e.message || e}`);
+  }
+}
+
+/* REPLACE onSegment handler */
+r.mp4.onSegment = (id, user, buffer, sampleNumber, last) => {
+  try {
+    safeAppend(r, buffer);
+    mlog(`Segment ${sampleNumber} (last=${last}) ${buffer.byteLength}`);
+    if (last) r.mp4Done = true;
+  } catch (e) {
+    mlog(`onSegment error: ${e.message || e}`);
+  }
+};
+
+/* REPLACE onupdateend */
+r.srcBfr.onupdateend = () => {
+  try {
+    if (r.Q.length && !r.srcBfr.updating) {
+      r.srcBfr.appendBuffer(r.Q.shift());
+      return;
+    }
+    if (r.mp4Done && !r.Q.length && r.MSE_mSrc.readyState === 'open') {
+      r.MSE_mSrc.endOfStream();
+      mlog('MSE endOfStream');
+    }
+  } catch (e) {
+    mlog(`onupdateend error: ${e.message || e}`);
+  }
+};
+
+/* REPLACE mp4 feeding logic */
+processChk = (ab, r) => {
+  try {
+    if (!r.mp4 || r.mp4Done) return;
+    ab.fileStart = r.bfrInd;
+    r.bfrInd = r.mp4.appendBuffer(ab);
+  } catch (e) {
+    mlog(`mp4 append error: ${e.message || e}`);
+  }
+};
+
+/* MODIFY handleStream mp4 feeding */
+if (r.usesMSE && r.mp4 && r.Q.length < 10 && r.MSE_mSrc?.readyState === 'open') {
+  processChk(ab, r);
+}
+
+/* ENSURE cleanup never appends after close */
+V = r => {
+  try {
+    if (r.srcBfr && r.MSE_mSrc?.readyState === 'open') {
+      r.MSE_mSrc.endOfStream();
+    }
+  } catch {}
+  if (r.ou) URL.revokeObjectURL(r.ou);
+  p.delete(r.q);
+};
+
+/* ===================== MSE / MP4 FIXES END ===================== */

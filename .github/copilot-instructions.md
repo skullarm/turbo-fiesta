@@ -137,8 +137,7 @@ Forms are auto-intercepted with `addFormIntercept()`. Supports GET, POST, PUT, P
 ## Common Pitfalls
 
 - **Don't** change variable naming convention - breaks request routing in Map `p`
-- **Don't** remove 9-byte request ID prepending from chunks - images require out-of-order reconstruction
-- **Don't** use Promise-heavy approach for MSE - backpressure via `r.Q.length < 20` is intentional
+- **Don't** remove 9-byte request ID prepending from chunks - images require out-of-order reconstruction-
 - **Don't** forget to call `r.mp4.flush()` after feeding segments
 - **For MSE**, always check `MediaSource.readyState === 'open'` before endOfStream()
 

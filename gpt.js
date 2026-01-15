@@ -359,8 +359,8 @@ addFormIntercept=el=>{
   }
  }
  Q(1,el,'form').forEach(addFormIntercept);
-},
-mlog=er=>{let dd=new Date();let cur=(localStorage.getItem('error')||'')+`\n${dd}-${JSON.stringify(er).slice(0,200)}`;localStorage.setItem('error',cur.slice(-10000))};
+};
+
 iu.onkeyup=i=>{if(i.key==='Enter')Yy(!!1)};
 iu.ondblclick=i=>{So();K();U('')};
 bck.onclick=async i=>{if(h.length>1){if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1) }};

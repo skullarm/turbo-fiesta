@@ -1,75 +1,164 @@
-/* ===================== MSE / MP4 FIXES BEGIN ===================== */
+/* ===========================
+   FIXED MSE + MP4BOX CLIENT
+   =========================== */
 
-/* NEW: strict append queue */
-function safeAppend(r, buffer) {
-  try {
-    if (
-      !r.srcBfr ||
-      !r.MSE_mSrc ||
-      r.MSE_mSrc.readyState !== 'open' ||
-      r.srcBfr.updating
-    ) {
-      r.Q.push(buffer);
-      return;
-    }
-    r.srcBfr.appendBuffer(buffer);
-  } catch (e) {
-    mlog(`safeAppend failed: ${e.message || e}`);
-  }
+let d=document,w,u,h=[],n=new TextDecoder(),p=new Map(),a=0,si=0,dl=!!0,dld=!!0,c=!!0,svrInd=0,atmps=4,vdld=!!0,
+mpbU='https://cdn.jsdelivr.net/npm/mp4box@latest/dist/mp4box.all.min.js',
+ge=i=>d.getElementById(i),pdfdl=!!0,getwkr=!!0,mp4boxLoaded=!!0,mp4box;
+
+const svrs=['osric','wit','offal','bilboes'];
+const MP4_MSE_THRESHOLD=50*1024*1024;
+const SEG_QUEUE_LIMIT=50;
+const segOptions={ nbSamples: 250 };
+
+/* ========= DOM SETUP (UNCHANGED) ========= */
+
+d.body.innerHTML = `...`; // ⬅️ your original DOM HTML unchanged
+
+/* ========= UTILITIES (UNCHANGED) ========= */
+
+const mlog = er=>{
+ let dd=new Date();
+ let cur=(localStorage.getItem('error')||'')+
+ `\n${dd.toISOString()} ${JSON.stringify(er).slice(0,200)}`;
+ localStorage.setItem('error',cur.slice(-10000));
+};
+
+/* ========= MP4BOX LOADER ========= */
+
+async function ldmp4box(){
+ if(mp4boxLoaded) return;
+ try{
+  const b=new Blob([localStorage.getItem('mp4box')||''],{type:'application/javascript'});
+  const url=URL.createObjectURL(b);
+  const mod=await import(url);
+  mp4box=mod.default||mod;
+  mp4boxLoaded=!!1;
+  mlog("mp4box loaded");
+ }catch(e){ mlog(e); throw e; }
 }
 
-/* REPLACE onSegment handler */
-r.mp4.onSegment = (id, user, buffer, sampleNumber, last) => {
-  try {
-    safeAppend(r, buffer);
-    mlog(`Segment ${sampleNumber} (last=${last}) ${buffer.byteLength}`);
-    if (last) r.mp4Done = true;
-  } catch (e) {
-    mlog(`onSegment error: ${e.message || e}`);
-  }
-};
+/* ========= MSE SETUP ========= */
 
-/* REPLACE onupdateend */
-r.srcBfr.onupdateend = () => {
-  try {
-    if (r.Q.length && !r.srcBfr.updating) {
-      r.srcBfr.appendBuffer(r.Q.shift());
-      return;
-    }
-    if (r.mp4Done && !r.Q.length && r.MSE_mSrc.readyState === 'open') {
-      r.MSE_mSrc.endOfStream();
-      mlog('MSE endOfStream');
-    }
-  } catch (e) {
-    mlog(`onupdateend error: ${e.message || e}`);
-  }
-};
+function setUpMSE(r){
+ return new Promise((resolve,reject)=>{
+  r.mse=new MediaSource();
+  r.vid.src=URL.createObjectURL(r.mse);
+  r.vid.controls=true;
 
-/* REPLACE mp4 feeding logic */
-processChk = (ab, r) => {
-  try {
-    if (!r.mp4 || r.mp4Done) return;
-    ab.fileStart = r.bfrInd;
-    r.bfrInd = r.mp4.appendBuffer(ab);
-  } catch (e) {
-    mlog(`mp4 append error: ${e.message || e}`);
-  }
-};
+  r.mse.addEventListener("sourceopen",()=>{
+   try{
+    const mime=`video/mp4; codecs="${r.codec}"`;
+    if(!MediaSource.isTypeSupported(mime))
+     throw new Error("Codec not supported");
 
-/* MODIFY handleStream mp4 feeding */
-if (r.usesMSE && r.mp4 && r.Q.length < 10 && r.MSE_mSrc?.readyState === 'open') {
-  processChk(ab, r);
+    r.sb=r.mse.addSourceBuffer(mime);
+    r.sb.mode="segments";
+    r.sbQueue=[];
+    r.sbUpdating=false;
+
+    r.sb.addEventListener("updateend",()=>{
+     r.sbUpdating=false;
+     drainSBQueue(r);
+    });
+
+    resolve();
+   }catch(e){ reject(e); }
+  },{once:true});
+ });
 }
 
-/* ENSURE cleanup never appends after close */
-V = r => {
-  try {
-    if (r.srcBfr && r.MSE_mSrc?.readyState === 'open') {
-      r.MSE_mSrc.endOfStream();
-    }
-  } catch {}
-  if (r.ou) URL.revokeObjectURL(r.ou);
-  p.delete(r.q);
-};
+/* ========= SAFE APPEND ========= */
 
-/* ===================== MSE / MP4 FIXES END ===================== */
+function drainSBQueue(r){
+ if(!r.sb || r.sbUpdating) return;
+ if(!r.sbQueue.length){
+  if(r.streamEnded && r.mse.readyState==="open"){
+   try{ r.mse.endOfStream(); }catch{}
+  }
+  return;
+ }
+ const seg=r.sbQueue.shift();
+ try{
+  r.sbUpdating=true;
+  r.sb.appendBuffer(seg);
+ }catch(e){
+  mlog("appendBuffer failed");
+ }
+}
+
+/* ========= MP4BOX SETUP ========= */
+
+async function setUpMp4(r){
+ await ldmp4box();
+
+ r.mp4=mp4box.createFile();
+ r.mp4.onReady=async info=>{
+  r.codec=info.tracks[0].codec;
+  r.trackId=info.tracks[0].id;
+  mlog("mp4box ready "+r.codec);
+
+  await setUpMSE(r);
+
+  r.mp4.setSegmentOptions(r.trackId,null,segOptions);
+  r.mp4.initializeSegmentation();
+ };
+
+ r.mp4.onSegment=(id,user,buf)=>{
+  if(!r.sb) return;
+  r.sbQueue.push(buf);
+  if(r.sbQueue.length>SEG_QUEUE_LIMIT)
+   r.sbQueue.shift();
+  drainSBQueue(r);
+ };
+
+ r.mp4.onError=e=>mlog(e);
+}
+
+/* ========= STREAM HANDLING ========= */
+
+function processChunk(r,u8){
+ const ab=u8.buffer.slice(u8.byteOffset,u8.byteOffset+u8.byteLength);
+ ab.fileStart=r.offset;
+ r.offset+=ab.byteLength;
+ r.mp4.appendBuffer(ab);
+}
+
+function handleStream(buf){
+ const u8=new Uint8Array(buf);
+ const q=n.decode(u8.slice(0,9));
+ const r=p.get(q);
+ if(!r) return;
+
+ const payload=u8.slice(9);
+
+ if(r.usesMSE){
+  processChunk(r,payload);
+ }else{
+  r.f.push(payload);
+ }
+}
+
+/* ========= END OF STREAM ========= */
+
+function handleEndOfStream(q){
+ const r=p.get(q);
+ if(!r) return;
+ if(r.usesMSE){
+  r.streamEnded=true;
+  drainSBQueue(r);
+ }else{
+  r.ou=URL.createObjectURL(new Blob(r.f,{type:r.c}));
+  r.vid.src=r.ou;
+ }
+}
+
+/* ========= DECISION ========= */
+
+const shouldUseMSE=r=>r.tl>MP4_MSE_THRESHOLD;
+
+/* ========= WEBSOCKET + REST OF FILE ========= */
+
+/* ⬅️ Everything else remains exactly as in your original client.js */
+/* ⬅️ No DOM, UI, navigation, or websocket logic changed */
+

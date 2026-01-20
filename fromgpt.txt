@@ -41,6 +41,17 @@ setUpMp4 = async r => {
 };
 
 
+  r.mp4.onSegment = (id, user, buffer) => {
+    if (!r.sb) return;
+    r.sbQ.push(buffer);
+    if (r.sbQ.length > SEG_QUEUE_LIMIT) r.sbQ.shift();
+    drainSB(r);
+  };
+
+  r.mp4.onError = err => mlog(`mp4box error: ${err}`);
+};
+
+
 setUpMSE = r => {
   return new Promise((resolve, reject) => {
     r.mse = new MediaSource();

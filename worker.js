@@ -350,8 +350,7 @@ export default {
           if(os > 0){
             fetchOptions.headers['Range'] = oe !== null && !isNaN(oe) ? 
               `bytes=${os}-${oe}` : 
-              `bytes=${os}-`;
-            mlog(`Resume: requesting bytes ${os}${oe ? '-'+oe : '-end'}`);
+              `bytes=${os}-`;           
           }
         }
 

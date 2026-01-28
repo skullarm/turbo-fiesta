@@ -1,5 +1,5 @@
 {
-  "name": "turbo-fiesta",
+  "name": "tlb",
   "main": "worker.js", 
   "observability": {
     "enabled": true,

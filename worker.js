@@ -463,7 +463,9 @@ export default {
         else if (contentType.startsWith('video') || 
      contentType.startsWith('audio') || 
      contentType.startsWith('image') || 
-     contentType === 'application/pdf') {
+     contentType === 'application/pdf' ||
+     contentType.toLowerCase().includes('epub')||
+      contentType.toLowerCase().includes('torrent')) {
           
           await streamAndMaybeCacheMedia(
             response,
@@ -585,7 +587,7 @@ function sendBinaryChunk(server, value, contentType, qbytes) {
   let u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
   try {
     // Always prepend qbytes for image/audio/video/pdf to preserve protocol
-    if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video') || contentType === 'application/pdf') {
+    if (contentType.startsWith('image') || contentType.startsWith('audio') || contentType.startsWith('video') || contentType === 'application/pdf'||contentType.toLowerCase().includes('epub')||contentType.toLowerCase().includes('torrent')) {
       const ca = new Uint8Array(qbytes.length + u8.length);
       ca.set(qbytes, 0);
       ca.set(u8, qbytes.length);

@@ -321,6 +321,7 @@ export default {
         fetchTimeout = setTimeout(() => controller.abort(), timeoutMs);
         
         // Prepare fetch options with optimized headers
+        // Note: Removed Sec-* headers as they are browser-specific and cause blocks on anti-bot systems
         let fetchOptions = {
           method: fetchMethod,
           headers: {
@@ -331,15 +332,7 @@ export default {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
             'Referer': normalizedU,
-            'Origin': origin,
-            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="133", "Google Chrome";v="133"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"Windows"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1'
+            'Origin': origin
           },
           signal: controller.signal,
           redirect: 'manual' // handle redirects manually to avoid subrequest chains

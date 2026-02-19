@@ -759,6 +759,19 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
         const b64 = uint8ToBase64(out);
         const result = jsonMsg('r', contentType, b64, requestID, '');
         await cachePut(cacheKey, result, caches.default);
+
+        // also store a raw-binary version under the "binary" key so
+        // the earlier lookup in fetch() can hit it directly and stream
+        try {
+          const binKey = cacheKey + '&cache=bin1';
+          const headers = new Headers({
+            'Content-Type': contentType,
+            'Content-Length': streamedLength.toString()
+          });
+          await cache.put(binKey, new Response(out, { headers }));
+        } catch (e) {
+          // ignore failures writing the secondary cache
+        }
       } catch (e) {
         // caching failure is non-fatal
       }

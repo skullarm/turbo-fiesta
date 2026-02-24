@@ -14,5 +14,8 @@
   "workers-dev": true /*""*/,
   "limit": {
     "cpu_ms": 300000
-  }
+  },
+  "kv_namespaces": [
+    { "binding": "STORE", "id": "offal" }
+  ]
 }

@@ -460,12 +460,15 @@ export default {
      contentType.toLowerCase().includes('epub')||
       contentType.toLowerCase().includes('torrent')) {
           
+          // Disable caching for audio and video; keep caching for images/PDFs/EPUB/torrent
+          const shouldCache = !contentType.startsWith('audio') && !contentType.startsWith('video');
+          
           await streamAndMaybeCacheMedia(
             response,
             server,
             contentType,
             qbytes,
-            true,
+            shouldCache,
             5 * 1024 * 1024,  // 5MB cache limit (reduced to save memory/CPU)
             requestID,
             cacheKey,

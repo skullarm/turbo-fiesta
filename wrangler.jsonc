@@ -16,7 +16,7 @@
     "cpu_ms": 300000
   },
  "kv_namespaces": [{
-                    "binding": "KV_BINDING",
+                    "binding": "STORE",
                     "id": "39f57317259c4f329b0b5427089fe4fe"
                  }]
 }

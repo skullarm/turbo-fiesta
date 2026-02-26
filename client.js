@@ -259,7 +259,7 @@ ldpdfJS=async()=>{
    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
 },
 
-// Load mp4box via proxy
+// Load mp4box via proxy (fetch script via websocket then inject script tag)
 ldmp4box=async i=>{
   if(mp4boxLoaded) return;
   try{
@@ -268,19 +268,31 @@ ldmp4box=async i=>{
       ws.send(JSON.stringify({u:'CMD_KV_GET?key=mp4box',au:P()}));
     };
     ws.onmessage=async m=>{
-      ws.close();ws='';
-      const b=new Blob([JSON.parse(m.data).d],{type:'application/javascript'});
-      const url=URL.createObjectURL(b);
-      const mod=await import(url);
-      mp4box=mod;
-      mp4boxLoaded=!!1;
-     // mlog('mp4box loaded');
+      try{
+        ws.close();ws='';
+      }catch(e){}
+      try{
+        const code = JSON.parse(m.data).d || '';
+        const b=new Blob([code],{type:'application/javascript'});
+        const url=URL.createObjectURL(b);
+        // inject as script so global MP4Box is defined
+        await new Promise((resolve,reject)=>{
+          const sc=document.createElement('script');
+          sc.src=url;
+          sc.onload=()=>{resolve();};
+          sc.onerror=(e)=>reject(e);
+          document.head.appendChild(sc);
+        });
+        mp4box = window.MP4Box || window.mp4box || window.MP4Box && window.MP4Box; 
+        mp4boxLoaded = true;
+        URL.revokeObjectURL(url);
+      }catch(er){mlog(`ldmp4box parse/load: ${er.message||er}`)}
     };
   }catch(er){mlog(`ldmp4box: ${er.message||er}`)}
 },
 
 // MSE threshold check
-shouldUseMSE=r=>!!0,//r.tl>MP4_MSE_THRESHOLD,
+shouldUseMSE=r=>!!(r && r.tl && r.tl>MP4_MSE_THRESHOLD),
 
 // Media detection
 isMedia=u=>mediaExts.some(ext=>u.pathname.toLowerCase().endsWith(ext)),
@@ -330,72 +342,68 @@ C=i=>{
 */
 setUpMp4=async r=> {
   if (!mp4boxLoaded) await ldmp4box();
-  r.mp4boxFile= mp4box.createFile();
+  if (!mp4box) throw new Error('mp4box not available');
+  r.mp4boxFile = mp4box.createFile();
   r.offset = 0;
-  r.pendingSegments = [];
+  r.sbQueue = r.sbQueue || [];
   r.streamEnded = false;
   r.mp4boxFile.onError = e => mlog(`mp4box error: ${e}`);
+
   r.mp4boxFile.onReady = async info => {
-    mlog('mp4box onReady fired – tracks: ' + info.tracks.length);
+    mlog('mp4box onReady fired – tracks: ' + (info.tracks?info.tracks.length:0));
     r.mp4Info = info;
+    // ensure video element exists
+    if(!r.vid) r.vid = l('video');
+    // build codec string from tracks
+    const codecs = (info.tracks||[]).map(t=>t.codec).filter(Boolean).join(',');
+    r.codec = codecs;
     await setUpMSE(r, info);
-  for(const track of info.tracks){
-      r.mp4.setSegmentOptions(track.id, track.type==='video'?'vid':'aud', segOptions);
-   }
-    const initSegs = r.mp4boxFile.initializeSegmentation();
-      const sb = r.sourceBuffer;
-      if (sb && !sb.updating) {
-      //  sb.appendBuffer(initSegs.buffer); HOW DO I APPEND THE INITSEGS buffer?? The documentation says the initializeSegmentation function returns an array of tracks, each with their own buffer, but this seems to no longer be true. Instead, an object is returned with a single buffer. Docs seem to be outdated?? Can you check mp4box.js's source code?
+    // set segment options for each track
+    try{
+      for(const track of info.tracks||[]){
+        try{ r.mp4boxFile.setSegmentOptions(track.id, segOptions); }catch(e){}
       }
-   
-    for (const seg of r.pendingSegments) {
-        drainSB(r, seg.trackId);
-    }
-    r.mp4boxFile.start();
+    }catch(e){mlog(`setSegmentOptions failed: ${e}`)}
+    // start processing (mp4box will call onSegment as segments become available)
+    try{ r.mp4boxFile.start(); }catch(e){mlog(e)}
   };
-  r.mp4boxFile.onSegment = (trackId, user, buffer, sampleNum, last) => {
-    if (!r.sourceBuffer) {
-      r.pendingSegments.push(buffer);
-      return;
-    }
 
-      drainSB(r, trackId);
-
-    if (last) {
-      endMSEStream(r);
-    }
+  r.mp4boxFile.onSegment = (trackId, user, buffer) => {
+    // buffer is an ArrayBuffer containing an ISO BMFF segment
+    const seg = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
+    // queue into SourceBuffer queue
+    r.sbQueue = r.sbQueue || [];
+    r.sbQueue.push(seg);
+    drainSB(r);
   };
 },
 setUpMSE=(r, info)=> {
   return new Promise((resolve, reject) => {
     r.mse = new MediaSource();
+    if(!r.vid) r.vid = l('video');
     r.vid.src = window.URL.createObjectURL(r.mse);
     r.vid.controls = true;
     r.vid.autoplay = true;
-    r.vid.onerror = (e) => mlog(`Video error: ${e.message||e}`);
+    r.vid.onerror = (e) => mlog(`Video error: ${e && e.message || e}`);
     pl.appendChild(r.vid);
     r.mse.addEventListener('sourceopen', () => {
       try {
-        r.sourceBuffer='';
-         const vidTrack=info.videoTracks?.[0];
-         const audTrack=info.audioTracks?.[0];
-         let codecParts=[];
-        codecParts.push(vidTrack.codec);
-        if(audTrack)codecParts.push(audTrack.codec);
-        const codec=codecParts.join(', ');
-          const mime = `video/mp4; codecs="${codec}"`;
-          if (!MediaSource.isTypeSupported(mime)) {
-            U(`Unsupported MIME: ${mime}`);
-            return;
-          }
-          const sb = r.mse.addSourceBuffer(mime);
-          sb.mode = 'segment';
-          sb.addEventListener('updateend', () => {
-            drainSB(r, track.id);
-            trimSourceBuffer(sb, r.vid);
-          });
-          r.sourceBuffer = sb;
-       resolve();
+        const tracks = (info && info.tracks) || [];
+        const codecs = tracks.map(t=>t.codec).filter(Boolean).join(',');
+        const mime = `video/mp4; codecs="${codecs}"`;
+        if (!MediaSource.isTypeSupported(mime)) {
+          U(`Unsupported MIME: ${mime}`);
+          // still resolve so UI doesn't hang, but won't enable MSE
+          return resolve();
+        }
+        const sb = r.mse.addSourceBuffer(mime);
+        sb.mode = 'segments';
+        sb.addEventListener('updateend', () => {
+          drainSB(r);
+          try{ trimSourceBuffer(sb, r.vid); }catch(e){}
+        });
+        r.sourceBuffer = sb;
+        resolve();
       } catch (e) {
         reject(e);
       }
@@ -403,18 +411,22 @@ setUpMSE=(r, info)=> {
   });
 },
 processChk=(r, u8)=> {
+  if (!r.mp4boxFile) return;
   if (r.offset === undefined) r.offset = 0;
   const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
   ab.fileStart = r.offset;
-  const nextOffset = r.mp4boxFile.appendBuffer(ab);
-  r.offset = nextOffset;
+  try{
+    const nextOffset = r.mp4boxFile.appendBuffer(ab);
+    // mp4box returns next expected fileStart; if not, increment
+    r.offset = (typeof nextOffset === 'number' && !isNaN(nextOffset)) ? nextOffset : (r.offset + u8.byteLength);
+  }catch(e){mlog(`appendBuffer failed: ${e}`)}
 },
-drainSB=(r, trackId)=> {
-  const sb = r.sourceBuffer;
-   const q=r.pendingSegments;
+drainSB=(r)=> {
+  const sb = r.sourceBuffer || r.sb;
+  const q = r.sbQueue || [];
   if (!sb || sb.updating || !q.length) return;
-  const chunk=q.shift();
-  sb.appendBuffer(chunk);
+  const chunk = q.shift();
+  try{ sb.appendBuffer(chunk); }catch(e){mlog(`SourceBuffer.appendBuffer failed: ${e}`)}
 },
 trimSourceBuffer=(sb, vid)=> {
   if (sb.buffered.length > 0) {
@@ -428,12 +440,12 @@ trimSourceBuffer=(sb, vid)=> {
 },
 endMSEStream=(r)=> {
   const tryEnd = () => {
-    const busy = r.sourceBuffer.updating || r.pendingSegments.length > 0;
+    const busy = (r.sourceBuffer && r.sourceBuffer.updating) || (r.sbQueue && r.sbQueue.length > 0);
     if (!busy && r.mse.readyState === 'open') {
       r.mse.endOfStream();
     }
   };
-  r.sourceBuffer.addEventListener('updateend', tryEnd, { once: true })
+  if(r.sourceBuffer) r.sourceBuffer.addEventListener('updateend', tryEnd, { once: true })
   tryEnd();
 },
 
@@ -494,6 +506,10 @@ handleResponse=async i=>{
 
     r.usesMSE=shouldUseMSE(r);
 
+    if((r.v || r.a) && r.usesMSE){
+      try{ setUpMp4(r); }catch(e){mlog(e)}
+    }
+
     if(r.v && !r.usesMSE){r.vid=l('video');r.vid.controls=!!1;r.vid.addEventListener('canplaythrough',loadDone)}
     if(r.a && !r.usesMSE){r.vid=l('video');r.vid.controls=!!1;r.vid.addEventListener('canplaythrough',loadDone)}
   }
@@ -515,8 +531,13 @@ handleStream=async buf=>{
    r = p.get(reqIdStr),
    payload = x.subarray(reqIdBytes);
    if(!r) return;
-   r.f.push(payload);
    r.b += payload.length;
+   // If using MSE, feed mp4box directly to avoid buffering whole file
+   if (r.usesMSE) {
+     try{ processChk(r, payload); }catch(e){mlog(e)}
+   } else {
+     r.f.push(payload);
+   }
    let prct=((r.b/r.tl)*100).toFixed(2);
    if(!dld&&prct<=100){
     U(`Download Progress: ${(r.b/1048576).toFixed(2)} of ${r.mb} mb (${prct}%)`);
@@ -538,14 +559,14 @@ handleEndOfStream=async q=>{
     r.streamEnded = true;
     if (r.mp4boxFile) {
       try {
-        r.mp4boxFileflush();
+        if (typeof r.mp4boxFile.flush === 'function') r.mp4boxFile.flush();
         endMSEStream(r);
       } catch (e) {
         mlog(`flush failed: ${e}`);
       }
     }
     return;
-  }else{
+  } else {
     r.ou=window.URL.createObjectURL(new Blob(r.f,{type:r.c}));
     if(r.i){I(Q('',sd,`img[data-pq="${q}"]`),r)}
     else if(r.pdf){r.h=!!1;pb.style.width='0%';await U('Loading PDF...');setUpPDF(r);HPDF(r);}
@@ -748,7 +769,9 @@ Z=(ur,q,t,b,method,oe=null)=>{
   // let key='clientCode';
    // let val=encodeURIComponent(localStorage.getItem('a'))
  //  uu=`CMD_KV_PUT?key=${key}&val=${val}`;
-  if(p.get(q).isMedia)setUpMp4();
+  if(p.get(q).isMedia){
+    try{ setUpMp4(p.get(q)); }catch(e){mlog(e)}
+  }
   let msg={u:uu.toString(),q:q,au:P(),os:b,method:method};
   if(oe!==null)msg.oe=oe;
   if(method!=='GET'){msg.body=''}

@@ -307,6 +307,18 @@ export default {
         } catch {
           origin = 'https://dummy.local';
         }
+        // Ensure fetch headers: use provided `reqHeaders` or sensible defaults
+        let reqHeaders = msgData.reqHeaders;
+        if (!reqHeaders || typeof reqHeaders !== 'object') {
+          reqHeaders = {
+          "User-Agent": a || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Encoding": "identity",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Referer": normalizedU,
+          "Origin": origin
+};
+        }
 
         // Adaptive timeout based on content type
         let timeoutMs = 15000;
@@ -324,16 +336,7 @@ export default {
         // Note: Removed Sec-* headers as they are browser-specific and cause blocks on anti-bot systems
         let fetchOptions = {
           method: fetchMethod,
-          headers: {
-            'User-Agent': a || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Encoding': 'identity',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Referer': normalizedU,
-            'Origin': origin
-          },
+          headers: reqHeaders,
           signal: controller.signal,
           redirect: 'manual' // handle redirects manually to avoid subrequest chains
         };

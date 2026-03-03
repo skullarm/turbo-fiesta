@@ -354,27 +354,44 @@ setUpMp4=async r=> {
     r.mp4Info = info;
     // ensure video element exists
     if(!r.vid) r.vid = l('video');
-    // build codec string from tracks
-    const codecs = (info.tracks||[]).map(t=>t.codec).filter(Boolean).join(',');
-    r.codec = codecs;
+    // prepare containers for per-track SourceBuffers and queues
+    r.sourceBuffers = r.sourceBuffers || {};
+    r.sbQ = r.sbQ || {};
+    // set segment options per track
+    for(const track of info.tracks||[]){
+      try{ r.mp4boxFile.setSegmentOptions(track.id, null, segOptions); }catch(e){mlog(`setSegmentOptions failed: ${e}`)}
+      r.sbQ[track.id] = [];
+    }
+    // initialize MSE (creates source buffers per track)
     await setUpMSE(r, info);
-    // set segment options for each track
+    // initialize segmentation and append init segments to correct sourceBuffer
     try{
-      for(const track of info.tracks||[]){
-        try{ r.mp4boxFile.setSegmentOptions(track.id, segOptions); }catch(e){}
+      const initSegs = r.mp4boxFile.initializeSegmentation();
+      if(initSegs && initSegs.length){
+        for(const seg of initSegs){
+          // seg.user typically contains the track id or track index
+          const user = seg.user || seg.id || seg.trackId;
+          const sb = r.sourceBuffers[user] || r.sourceBuffer;
+          try{ if(sb && sb.buffered!==undefined && !sb.updating) sb.appendBuffer(seg.buffer || seg); }
+          catch(e){
+            // If append fails, queue init segment for later
+            if(!r.initQueue) r.initQueue=[]; r.initQueue.push({user,buf:seg.buffer||seg});
+          }
+        }
       }
-    }catch(e){mlog(`setSegmentOptions failed: ${e}`)}
-    // start processing (mp4box will call onSegment as segments become available)
+    }catch(e){mlog(`initializeSegmentation/append init failed: ${e}`)}
+    // start segmentation/processing
     try{ r.mp4boxFile.start(); }catch(e){mlog(e)}
   };
 
   r.mp4boxFile.onSegment = (trackId, user, buffer) => {
     // buffer is an ArrayBuffer containing an ISO BMFF segment
     const seg = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
-    // queue into SourceBuffer queue
-    r.sbQueue = r.sbQueue || [];
-    r.sbQueue.push(seg);
-    drainSB(r);
+    // push into per-track queue
+    r.sbQ = r.sbQ || {};
+    if(!r.sbQ[trackId]) r.sbQ[trackId]=[];
+    r.sbQ[trackId].push(seg);
+    drainSB(r, trackId);
   };
 },
 setUpMSE=(r, info)=> {
@@ -389,20 +406,26 @@ setUpMSE=(r, info)=> {
     r.mse.addEventListener('sourceopen', () => {
       try {
         const tracks = (info && info.tracks) || [];
-        const codecs = tracks.map(t=>t.codec).filter(Boolean).join(',');
-        const mime = `video/mp4; codecs="${codecs}"`;
-        if (!MediaSource.isTypeSupported(mime)) {
-          U(`Unsupported MIME: ${mime}`);
-          // still resolve so UI doesn't hang, but won't enable MSE
-          return resolve();
+        for(const track of tracks){
+          // construct mime for each track
+          const codec = track.codec || '';
+          const mime = `video/mp4; codecs="${codec}"`;
+          // prefer using track.type if available
+          const isSupported = MediaSource.isTypeSupported(mime);
+          if(!isSupported){
+            // try generic container mime
+            // fallback: still attempt to create SourceBuffer (may throw)
+          }
+          try{
+            const sb = r.mse.addSourceBuffer(mime);
+            sb.mode = 'sequence';
+            // store by track id
+            r.sourceBuffers = r.sourceBuffers || {};
+            r.sourceBuffers[track.id] = sb;
+            // event handler to drain this track's queue
+            sb.addEventListener('updateend', ()=>{ drainSB(r, track.id); try{ trimSourceBuffer(sb, r.vid); }catch(e){} });
+          }catch(e){ mlog(`addSourceBuffer failed for track ${track.id}: ${e}`) }
         }
-        const sb = r.mse.addSourceBuffer(mime);
-        sb.mode = 'segments';
-        sb.addEventListener('updateend', () => {
-          drainSB(r);
-          try{ trimSourceBuffer(sb, r.vid); }catch(e){}
-        });
-        r.sourceBuffer = sb;
         resolve();
       } catch (e) {
         reject(e);
@@ -421,12 +444,21 @@ processChk=(r, u8)=> {
     r.offset = (typeof nextOffset === 'number' && !isNaN(nextOffset)) ? nextOffset : (r.offset + u8.byteLength);
   }catch(e){mlog(`appendBuffer failed: ${e}`)}
 },
-drainSB=(r)=> {
-  const sb = r.sourceBuffer || r.sb;
-  const q = r.sbQueue || [];
-  if (!sb || sb.updating || !q.length) return;
+drainSB=(r, trackId)=> {
+  // support both single-buffer (legacy) and per-track buffers
+  if(typeof trackId === 'undefined'){
+    const sb = r.sourceBuffer || r.sb;
+    const q = r.sbQueue || [];
+    if (!sb || sb.updating || !q.length) return;
+    const chunk = q.shift();
+    try{ sb.appendBuffer(chunk); }catch(e){mlog(`SourceBuffer.appendBuffer failed: ${e}`)}
+    return;
+  }
+  const sb = (r.sourceBuffers && r.sourceBuffers[trackId]) || r.sourceBuffer;
+  const q = (r.sbQ && r.sbQ[trackId]) || [];
+  if(!sb || sb.updating || !q.length) return;
   const chunk = q.shift();
-  try{ sb.appendBuffer(chunk); }catch(e){mlog(`SourceBuffer.appendBuffer failed: ${e}`)}
+  try{ sb.appendBuffer(chunk); }catch(e){mlog(`SourceBuffer.appendBuffer failed for track ${trackId}: ${e}`)}
 },
 trimSourceBuffer=(sb, vid)=> {
   if (sb.buffered.length > 0) {
@@ -440,12 +472,24 @@ trimSourceBuffer=(sb, vid)=> {
 },
 endMSEStream=(r)=> {
   const tryEnd = () => {
-    const busy = (r.sourceBuffer && r.sourceBuffer.updating) || (r.sbQueue && r.sbQueue.length > 0);
-    if (!busy && r.mse.readyState === 'open') {
-      r.mse.endOfStream();
+    // busy if any sourceBuffer is updating or any per-track queue has items
+    let busy = false;
+    if(r.sourceBuffer && r.sourceBuffer.updating) busy = true;
+    if(r.sourceBuffers){
+      for(const id in r.sourceBuffers){
+        try{ if(r.sourceBuffers[id].updating) { busy = true; break;} }catch(e){}
+      }
+    }
+    if(!busy){
+      if(r.sbQueue && r.sbQueue.length>0) busy = true;
+      if(r.sbQ){ for(const id in r.sbQ){ if(r.sbQ[id] && r.sbQ[id].length>0){ busy = true; break;} }}
+    }
+    if (!busy && r.mse && r.mse.readyState === 'open') {
+      try{ r.mse.endOfStream(); }catch(e){}
     }
   };
   if(r.sourceBuffer) r.sourceBuffer.addEventListener('updateend', tryEnd, { once: true })
+  if(r.sourceBuffers){ for(const id in r.sourceBuffers){ try{ r.sourceBuffers[id].addEventListener('updateend', tryEnd, { once:true }); }catch(e){} }}
   tryEnd();
 },
 

@@ -76,10 +76,10 @@ export default {
         let mn = dt.getUTCMonth();
         let dd = dt.getUTCDate();
         let mAu = btoa(`${y}${mn}${dd}`);
-        if (mAu !== au) {
+        /*if (mAu !== au) {
           safeSend(jsonMsg('er', '', 'Authentication failed', '', ''));
           return;
-        }
+        }*/
 
         // Special endpoint: return client demo code as HTML
         if (u === 'getcodeclient') {

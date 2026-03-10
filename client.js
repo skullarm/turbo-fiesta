@@ -2,7 +2,7 @@
 //This client app sits behind repressive network restrictions that allow no http(s) requests except to .cloudflare.com domains. only websocket connections are permitted//
 
 // Globals
-let d=document,w,u,h=[],n=new TextDecoder(),p=new Map(),a=0,si=0,dl=!!0,dld=!!0,c=!!0,svrInd=0,atmps=4,vdld=!!0,adld=!!0,ge=i=>d.getElementById(i),pdfdl=!!0,getwkr=!!0,mp4boxLoaded=!!0,mp4box,isFading=!!0,firstLoad=!!1,cnclFade=!!0,showBase='https://archive.org/download/',archiveBase='https://archive.org/details/',pdfjsLib=null,dimmed=!!0,audList=[],linkText='',currentFadeEl=null,audPlayer=null,nxtClickTmr=null,playClickTmr=null,prevClickTmr=null,playerVis=!!0,currentMediaIndex=-1,keyList=[],domCache=new Map(),isAnimating=!!0;
+let d=document,w,u,h=[],n=new TextDecoder(),p=new Map(),a=0,si=0,dl=!!0,dld=!!0,c=!!0,svrInd=0,atmps=4,vdld=!!0,adld=!!0,ge=i=>d.getElementById(i),pdfdl=!!0,getwkr=!!0,mp4boxLoaded=!!0,mp4box,isFading=!!0,firstLoad=!!1,cnclFade=!!0,showBase='https://archive.org/download/',archiveBase='https://archive.org/details/',pdfjsLib=null,dimmed=!!0,audList=[],linkText='',currentFadeEl=null,audPlayer=null,nxtClickTmr=null,playClickTmr=null,prevClickTmr=null,playerVis=!!0,currentMediaIndex=-1,keyList=[],domCache=new Map(),isAnimating=!!0,sliderActive=!!0,sliderLongPressTimer=null,sliderIsDragging=!!0,LONG_PRESS_DURATION=500;
 
 //css variable to attach
 const cssStyles = `
@@ -74,6 +74,15 @@ const cssStyles = `
 #prev-media{left:10px}
 #next-media{right:10px}
 .collapse-button{position:absolute;top:-3px;left:0px;transform:scale(1.75);transform-origin:top left;border:none;background-color:transparent}
+.seek-slider-container{position:fixed;bottom:0;left:0;right:0;height:0;background:#1a1a1a;border-top:2px solid #4a9eff;opacity:0;transform:translateY(100%);transition:opacity 0.2s ease,transform 0.2s ease;z-index:100001000;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0}
+.seek-slider-container.active{height:140px;opacity:1;transform:translateY(0);pointer-events:all;padding:12px}
+.seek-slider-wrapper{width:90%;display:flex;flex-direction:column;align-items:center;gap:10px}
+.seek-slider-label{color:#eee;font-size:13px;text-align:center;white-space:nowrap;font-family:system-ui,sans-serif}
+.slider-track{width:100%;height:8px;background:#444;border-radius:4px;position:relative;cursor:pointer}
+.slider-fill{height:100%;background:#4a9eff;border-radius:4px;pointer-events:none}
+.slider-handle{position:absolute;top:50%;right:0;transform:translate(50%,-50%);width:32px;height:32px;background:#4a9eff;border-radius:50%;box-shadow:0 2px 8px rgba(74,158,255,0.6);cursor:grab;pointer-events:all}
+.slider-handle:active{cursor:grabbing;box-shadow:0 4px 12px rgba(74,158,255,0.8)}
+.seek-slider-time{color:#4a9eff;font-size:14px;font-weight:bold;font-family:monospace;text-align:center}
 `;
 
 // Constants
@@ -127,6 +136,16 @@ d.body.innerHTML=`
  </div>
 </div>
 </div>
+<div id='seekSliderContainer' class='seek-slider-container'>
+ <div class='seek-slider-wrapper'>
+  <div class='seek-slider-label'>Slide to seek</div>
+  <div class='slider-track'>
+   <div class='slider-fill' id='sliderFill'></div>
+   <div class='slider-handle' id='sliderHandle'></div>
+  </div>
+  <div class='seek-slider-time'><span id='sliderTime'>0:00</span> / <span id='sliderDuration'>0:00</span></div>
+ </div>
+</div>
 </div>
 <div id='ct'></div>
 <div id='sidebar' class='sidebar'>
@@ -140,7 +159,7 @@ d.body.innerHTML=`
 const originalURL=globalThis.URL;//for adding parse to URL class
 
 // Element refs
-let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),ct=ge('ct'),msgs=ge('msgs'),pb=ge('pb'),sidebar=ge('sidebar'),tree=ge('sidebar-treeview'),trackDetails=ge('trackDetails'),prev=ge('btn-prev'),next=ge('btn-next'),close=ge('btn-close-player'),play=ge('btn-play'),audDiv=ge('aud-wrapper'),prevMedia=ge('prev-media'),nextMedia=ge('next-media'),mediaContainer=ge('pl'),trackTimeDetail=ge('trackTimeDetail');
+let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),ct=ge('ct'),msgs=ge('msgs'),pb=ge('pb'),sidebar=ge('sidebar'),tree=ge('sidebar-treeview'),trackDetails=ge('trackDetails'),prev=ge('btn-prev'),next=ge('btn-next'),close=ge('btn-close-player'),play=ge('btn-play'),audDiv=ge('aud-wrapper'),prevMedia=ge('prev-media'),nextMedia=ge('next-media'),mediaContainer=ge('pl'),trackTimeDetail=ge('trackTimeDetail'),seekSliderContainer=ge('seekSliderContainer'),sliderHandle=ge('sliderHandle'),sliderFill=ge('sliderFill'),sliderTrack=ge('sliderTrack')||ge('slider-track'),sliderTime=ge('sliderTime'),sliderDuration=ge('sliderDuration'),sliderTrackEl=d.querySelector('.slider-track');
 
 // Shadow DOM
 let sd=ct.attachShadow({mode:'open'});
@@ -573,6 +592,7 @@ handleImages=(i,r)=>{//i is a reference to a img element if found with Q call in
 
 //clean up!audio player stuff on close
 closePlayer=async r=>{
+ hideSeekSlider();
  audPlayer.pause();
  audPlayer.removeAttribute('src');
  audPlayer.load();
@@ -668,6 +688,7 @@ handleAudio=async r=>{
       prev.addEventListener('click',tryPrev);
       prev.addEventListener('dblclick',seekBack)
       play.addEventListener('click',togglePlay);
+      initializeSliderEvents();
     }    
     audPlayer.addEventListener('canplaythrough',loadDone);
     let tags=await parseMediaTags(r)||{};
@@ -751,6 +772,137 @@ seekAudio=(secs)=>{
   if(t < 0) t = 0;
   if(audPlayer.duration && t > audPlayer.duration) t = 0;
   audPlayer.currentTime = t;
+},
+
+//Show the seek slider with nice animation
+showSeekSlider=()=>{
+  if(!audPlayer||!audPlayer.duration)return;
+  sliderActive=!!1;
+  seekSliderContainer.classList.add('active');
+  updateSliderDisplay();
+  sliderIsDragging=!!0;//reset dragging state
+},
+
+//Hide the seek slider
+hideSeekSlider=()=>{
+  sliderActive=!!0;
+  sliderIsDragging=!!0;
+  seekSliderContainer.classList.remove('active');
+  if(sliderLongPressTimer){
+    clearTimeout(sliderLongPressTimer);
+    sliderLongPressTimer=null;
+  }
+},
+
+//Update slider visual position and time display
+updateSliderDisplay=()=>{
+  if(!audPlayer||!audPlayer.duration)return;
+  const percent=(audPlayer.currentTime/audPlayer.duration)*100;
+  sliderFill.style.width=`${percent}%`;
+  sliderHandle.style.left=`${percent}%`;
+  sliderTime.textContent=formatTime(audPlayer.currentTime);
+  sliderDuration.textContent=formatTime(audPlayer.duration);
+},
+
+//Get slider position from mouse/touch event
+getSliderPosition=e=>{
+  if(!sliderTrackEl)return 0;
+  const rect=sliderTrackEl.getBoundingClientRect();
+  let clientX=e.clientX||e.touches?.[0].clientX||0;
+  const pos=clientX-rect.left;
+  return Math.max(0,Math.min(pos/rect.width,1));
+},
+
+//Handle slider drag for seeking
+handleSliderDrag=e=>{
+  if(!sliderIsDragging||!audPlayer||!audPlayer.duration)return;
+  e.preventDefault();
+  const percent=getSliderPosition(e);
+  const newTime=percent*audPlayer.duration;
+  audPlayer.currentTime=newTime;
+  updateSliderDisplay();
+},
+
+//Handle slider drag start
+handleSliderDragStart=e=>{
+  if(!sliderActive||!audPlayer||!audPlayer.duration)return;
+  e.preventDefault();
+  sliderIsDragging=!!1;
+  const percent=getSliderPosition(e);
+  const newTime=percent*audPlayer.duration;
+  audPlayer.currentTime=newTime;
+  updateSliderDisplay();
+},
+
+//Handle slider drag end
+handleSliderDragEnd=()=>{
+  sliderIsDragging=!!0;
+},
+
+//Initialize slider event listeners
+initializeSliderEvents=()=>{
+  if(!trackTimeDetail)return;
+  //Long-press detection on trackTimeDetail
+  trackTimeDetail.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    sliderLongPressTimer=setTimeout(()=>{
+      showSeekSlider();
+      sliderLongPressTimer=null;
+    },LONG_PRESS_DURATION);
+  });
+  
+  trackTimeDetail.addEventListener('touchend',()=>{
+    if(sliderLongPressTimer){
+      clearTimeout(sliderLongPressTimer);
+      sliderLongPressTimer=null;
+    }
+  });
+
+  trackTimeDetail.addEventListener('touchmove',()=>{
+    if(sliderLongPressTimer){
+      clearTimeout(sliderLongPressTimer);
+      sliderLongPressTimer=null;
+    }
+  });
+
+  //Slider interactions
+  if(sliderHandle){
+    sliderHandle.addEventListener('touchstart',handleSliderDragStart);
+    sliderHandle.addEventListener('mousedown',handleSliderDragStart);
+  }
+
+  if(sliderTrackEl){
+    sliderTrackEl.addEventListener('touchstart',handleSliderDragStart);
+    sliderTrackEl.addEventListener('mousedown',handleSliderDragStart);
+  }
+
+  //Global drag handlers
+  d.addEventListener('touchmove',handleSliderDrag);
+  d.addEventListener('mousemove',handleSliderDrag);
+
+  //Drag end handlers
+  d.addEventListener('touchend',handleSliderDragEnd);
+  d.addEventListener('mouseup',handleSliderDragEnd);
+
+  //Close slider on outside tap
+  d.addEventListener('touchstart',e=>{
+    if(sliderActive&&!seekSliderContainer.contains(e.target)&&!trackTimeDetail.contains(e.target)){
+      hideSeekSlider();
+    }
+  });
+
+  d.addEventListener('click',e=>{
+    if(sliderActive&&!seekSliderContainer.contains(e.target)&&!trackTimeDetail.contains(e.target)){
+      hideSeekSlider();
+    }
+  });
+
+  //Update slider display during playback
+  audPlayer.addEventListener('timeupdate',()=>{
+    if(sliderActive&&!sliderIsDragging){
+      updateSliderDisplay();
+    }
+  });
 },
 
 adjustPlayRate=async ()=>{

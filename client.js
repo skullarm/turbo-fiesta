@@ -1,11 +1,17 @@
-//**!!FILE MUST BE EXECUTABLE VIA JAVASCRIPTS'S eval() FUNCTION. I AM AWARE OF CONCERNS WITH IT.!!**
+//***!!FILE MUST BE EXECUTABLE VIA JAVASCRIPTS'S eval() FUNCTION. I AM AWARE OF CONCERNS WITH IT.!!***
+//This client app sits behind repressive network restrictions that allow no http(s) requests except to .cloudflare.com domains. only websocket connections are permitted//
 
 // Globals
-let d=document,w,u,h=[],n=new TextDecoder(),p=new Map(),a=0,si=0,dl=!!0,dld=!!0,c=!!0,svrInd=0,atmps=4,vdld=!!0,mpbU='https://cdn.jsdelivr.net/npm/mp4box@latest/dist/mp4box.all.min.js',
-ge=i=>d.getElementById(i),pdfdl=!!0,getwkr=!!0,mp4boxLoaded=!!0,mp4box,isFading=!!0,firstLoad=!!1,cnclFade=!!0,showBase='https://archive.org/download/',archiveBase='https://archive.org/details/',pdfjsLib=null,dimmed=!!0,mp3List=[];
+let d=document,w,u,h=[],n=new TextDecoder(),p=new Map(),a=0,si=0,dl=!!0,dld=!!0,c=!!0,svrInd=0,atmps=4,vdld=!!0,adld=!!0,ge=i=>d.getElementById(i),pdfdl=!!0,getwkr=!!0,mp4boxLoaded=!!0,mp4box,isFading=!!0,firstLoad=!!1,cnclFade=!!0,showBase='https://archive.org/download/',archiveBase='https://archive.org/details/',pdfjsLib=null,dimmed=!!0,audList=[],linkText='',currentFadeEl=null,audPlayer=null,nxtClickTmr=null,playClickTmr=null,prevClickTmr=null,playerVis=!!0,currentMediaIndex=-1,keyList=[],domCache=new Map(),isAnimating=!!0;
 
-// CSS styles (all moved here; sidebar collapsible, closed default)
+//css variable to attach
 const cssStyles = `
+.msg-container{display: flex; justify-content: space-between;align-items: flex-start; width:100%;padding: 10px 15px;box-sizing: border-box}
+.player-wrapper{display:none;font-size:15px;flex-direction:column;align-items:center;gap:2px;position:relative;transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.68,-0.55,0.27,1.55);opacity:0;transform:translateX(100%);}
+.player-wrapper.is-visible{opacity:1;transform:translateX(0);display:flex;}
+.track-marquee{width:100%;overflow:hidden;position:relative;height:18px;border-radius:4px;display:flex;align-items:center;flex-shrink:0}
+.marquee-content{position:absolute;display:inline-block;white-space:nowrap;padding-left:100%;user-select:none;animation: marqueeScroll 18s linear infinite;padding-left:100%}
+@keyframes marqueeScroll{0%{transform:translateX(0);} 100%{transform:translate(-100%);}}
 .col, .col ul {list-style-type: none;padding-left:10px;}
 .col li{padding: 5px}
 .toggle{padding:12px;}
@@ -13,7 +19,7 @@ const cssStyles = `
 .toggle.show::before{content:'➖';}
 .col ul{display:none;}
 .toggle.show + ul{display:block;}
-.sidebar {position: fixed; left: -300px; top: 0; height: 100%; width: 300px; background: #2a2a2a; padding: 3px; transition: left 0.3s ease; z-index: 100000100;color:#eee}
+.sidebar {position: fixed; left: -300px; top: 0; height: 100%; width: 300px; background: #2a2a2a; padding: 3px; transition: left 0.5s ease; z-index: 100000100;color:#eee}
 .sidebar.open { left: 0; }
 #sidebar-options { padding:4px;margin: 10px; border:1px solid #fff}
 #sidebar-treeview { flex:1;padding:3px;margin:5px;color: #eee; max-height:100vh;overflow-y:auto;overflow-x:auto} 
@@ -22,15 +28,17 @@ const cssStyles = `
 .sidebar.open #btnOpn {display: none;}
 #overlay {display:none;position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,0.7);z-index:100000999;font-family:system-ui,sans-serif;align-items:center;justify-content:center;pointer-events: none}
 #overlay span{background:#222;color:#eee;padding:2em;border-radius:8px;text-align:center;max-width:500px;border: 1px solid #665}
-#pl {background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#pl {background:#1a1a1a;background-color:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;width:100%;height:0vh;overflow:hidden;align-self:center}
 .sticky-header {position:sticky;top:0;z-index:100000099;background:#2a2a2a;color:#eee;padding:8px;font-family:system-ui,sans-serif;border-bottom:1px solid #444}
 .sticky-header div {display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .sticky-header button, .sticky-header input {padding:6px 12px;background:#444;color:#fff;border:1px solid #665;border-radius:4px;cursor:pointer}
+.sticky-header button:active, span:active{transform:scale(0.95)}
 .sticky-header #iu {flex:1;min-width:200px;background:#1a1a1a;color:#eee;font-family:monospace;font-size:12px}
 .sticky-header #sv {width:80px;padding:4px;background:#1a1a1a;color:#eee;font-size:11px;text-align:center}
+.sticky-header #icon{font-size:1.75em;background:transparent;cursor:pointer;display:none}
 .sticky-header label {cursor:pointer;font-size:12px}
 #msgs {position: relative;width:100%;margin-top:8px;padding:8px;background:#1a1a1a;border-radius:4px;font-size:12px}
-#pg {font-family:monospace;top:0;left:4px;z-index:2}
+#pg {font-family:monospace;top:0;left:4px;z-index:2;font-weight: bold;font-sizes:15px}
 #pb {position: absolute;bottom:0;left:0;height:10px;background:linear-gradient(to right,#1a1a1a 0%, green 100%);width:0%;transition: width 0.3s ease;z-index:1}
 #ct {display:block;font-family:system-ui,sans-serif;color:#eee;background:#1a1a1a}
 #ct img, #ct video {max-width:100%;height:auto;margin:8px 0;border-radius:4px}
@@ -40,31 +48,84 @@ const cssStyles = `
 #ct pre {background:#111;padding:12px;overflow:auto;border-left:3px solid #4a9eff;margin:8px 0}
 #ct button {padding:6px 12px;background:#4a9eff;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold}
 #ct button:hover {background:#5ba4ff}
+.media-content{opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;opacity;0;transition:transform 0.4s ease-in-out;display:flex;justify-content:center;align-items:center;z-index:1;border:1px solid #444;border-radius:4px}
+.media-content.active{opacity:1;transform:translateX(0);z-index:2}
+.slide-left{transform:translateX(-100%);}
+.slide-right{transform:translateX(100%);}
+.animating{transition:transform 0.4s ease-in-out,opacity 0.4s;}
+.media-close-btn{
+ opacity:1;
+ position:absolute;
+ top:10px;right:10px;z-index:100;background:rgba(255,0,0,0.7);color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-weight:bold;}
+#prev-media.fade-out,#next-media.fade-out {opacity:0}
+#prev-media,#next-media{
+ opacity:1;
+ position:absolute;
+ top:50%;
+ transform:translateY(-50%);
+ background:rgba(255,255,255,0.2);
+ border:1px solid rgba(255,255,255,0.5);
+ padding:8px;
+ cursor:pointer;
+ font-size:28px;
+ z-index:11}
+.md-nav{transition: opacity 0.6s ease-out;will-change:opacity}
+.md-nav.fade-out{opacity:0}
+#prev-media{left:10px}
+#next-media{right:10px}
+.collapse-button{position:absolute;top:-3px;left:0px;transform:scale(1.75);transform-origin:top left;border:none;background-color:transparent}
 `;
 
 // Constants
-const svrs=['osric','wit','bilboes','phone','call','text','kazak','argos','sv1','skip','trace','alice','harley','turbo'];
-const chunkSize=500*1024*1024,segOptions={nbSamples:250},MP4_MSE_THRESHOLD=385*1024*1024,SEG_QUEUE_LIMIT=30;
-const mediaExts = ['.mp4', '.webm', '.ogv'];
+const svrs=['osric','wit','bilboes','phone','call','text','kazak','argos','sv1','skip','trace','alice','harley','turbo','truth','uwtb','light','dark'];
+const segOptions={nbSamples:250},
+  MP4_MSE_THRESHOLD=380*1024*1024,//files (made into blobs/objectURLs) cause my browser to crash so cutt-off at this point. Will try to fragment mp4's larger than this in the browser as chunks arrive using mp4box.js, then feed segments to mse source buffer that can be trimmed to prevent memory overload. Range requests can pull chunks of large mp4's down and feed through a mp4box.js to mse pipeline, so long as I have initSegs/moov info. Not currently able to do so.
+  SEG_QUEUE_LIMIT=30;//related to mp4box and mse pipeline. Trying to prevent swamping buffer. Not currently used of fully understood
 
-// HTML setup (overlay, player, header, content, sidebar)
+const mediaExts = ['.mp4', '.webm', '.ogv','.mp3','.flac'];
+
+const CLICK_DELAY=450,//double vs single click delay
+  MAX_MSG_LNGTH=100;
+
+// HTML setup for client
 d.body.innerHTML=`
+ 
 <div id='overlay'><span id='dimmsg'><h2>Double-Tap Anywhere</h2><p><h3>To Turn Dimmer Off</h3></span></div>
-<div id='pl'></div>
+<div id='pl'>
+ <button class='md-nav'  id='prev-media'>↩</button>
+ <button class='md-nav'  id='next-media'>↪</button>
+</div>
 <div class='sticky-header'>
 <div>
 <button id='btnOpn'>🌫</button>
 <button id='bck'>🔙 BCK</button>
 <button id='rf'>🔄 RF</button>
-<input id='iu' placeholder='https://...' />
+<input id='iu' placeholder='https://...' /><span id='icon'>🎶</span>
 <input id='sv' placeholder='SVR' readOnly />
 <input id='cb' type='checkbox'/> <label for='cb'>Auto</label>
 <input id='bs' type='button' />
 <button id='hide'>💡</button>
 </div>
-<div id='msgs'>
- <span id='pg'></span>
+<div id='msgs' class='msg-container'>
+ 
+ <span id='pg' class='msg-text'></span>
  <div id='pb'></div>
+<div id='aud-wrapper' class='player-wrapper' style='display:none'>
+ <!--<div id='collapseButton' class='collapse-button'>➖</div>-->
+  <div class='duration-wrapper'>
+   <div id='trackTimeDetail'>0:00:00</div>
+  </div>
+ <div class='aud-controls' style='display:flex;justify-content:space-between'>
+  <button id='btn-prev'>⏮</button>
+  <button id='btn-play'>▶</button>
+  <button id='btn-next'>⏭</button> | <button id='btn-close-player' styles='justify-content:space-between'>✖</button>
+ </div>
+ <div id='marqueeContainer' class='track-marquee'>
+  <div id='marqueeContent' class='marquee-content'>
+   Test CntentHere...
+  </div>
+ </div>
+</div>
 </div>
 </div>
 <div id='ct'></div>
@@ -76,14 +137,16 @@ d.body.innerHTML=`
 </div>
 `;
 
-const originalURL=globalThis.URL;
+const originalURL=globalThis.URL;//for adding parse to URL class
+
 // Element refs
-let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),ct=ge('ct'),msgs=ge('msgs'),pb=ge('pb'),sidebar=ge('sidebar'),tree=ge('sidebar-treeview');
+let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),ct=ge('ct'),msgs=ge('msgs'),pb=ge('pb'),sidebar=ge('sidebar'),tree=ge('sidebar-treeview'),trackDetails=ge('trackDetails'),prev=ge('btn-prev'),next=ge('btn-next'),close=ge('btn-close-player'),play=ge('btn-play'),audDiv=ge('aud-wrapper'),prevMedia=ge('prev-media'),nextMedia=ge('next-media'),mediaContainer=ge('pl'),trackTimeDetail=ge('trackTimeDetail');
 
 // Shadow DOM
 let sd=ct.attachShadow({mode:'open'});
 sd.innerHTML='<style>:host{all:initial}*{box-sizing:border-box}</style>';
 
+//to put pdf's in and out of 'dark' mode
 let toggleInvert=root=>{
  let el=root.getElementById('cvspdf');
  if(el.style.filter.includes('invert')){
@@ -92,6 +155,8 @@ let toggleInvert=root=>{
    el.style.filter='invert(1) grayscale(20%)';
  }
 };
+
+//html for my simple pdf viewer
 let pdfHTMLStr=`
 <DOCTYPE html>
 <html lang="en">
@@ -106,23 +171,46 @@ let pdfHTMLStr=`
 <canvas id="cvspdf" style="filter: invert(1) grayscale(20%)"></canvas>
 </body>
 `;
-// Utils
-let U=i=>new Promise((res)=>{ pg.textContent=i;res(pg);}),
-ic=(e,i)=>e.includes(i),
-sw=(e,i)=>e.startsWith(i),
-rm=(e,i)=>e.removeChild(i),
-J=(e,i)=>e.appendChild(i),
-W=(e,i)=>e.innerHTML=i,
+// Some Utils
+let U=(i,el=pg)=>new Promise((res)=>{ el.style.display='block';el.textContent=i;res(el);}),//Update msgs, etc
+ic=(e,i)=>e.includes(i),//includes
+sw=(e,i)=>e.startsWith(i),//startsWith
+rm=(e,i)=>e.removeChild(i),//remove
+J=(e,i)=>e.appendChild(i),//appendChild (J for JoinTo)
+W=(e,i)=>e.innerHTML=i,//write an elements innerHTML
 
-getBuffer=ck=>{
- if(ck instanceof ArrayBuffer){
- return ck;
- }else if(ck instanceof Uint8Array){
-  return ck.buffer(ck.byteOffSet,ck.byteOffSet+ck.byteLength);
- }
- return new Uint8Array(ck).buffer;
+//show or hide mediaDivc at top of app
+toggleMediaDiv=(show=!!1)=>{if(show)pl.style.height='100vh';else pl.style.height='0vh';},
+
+//show or hide little custom audio player front-end
+togglePlayerVisible=()=>{
+ playerVis=!playerVis;
+ if(playerVis){
+  audDiv.style.display='flex';
+  void audDiv.offsetWidth;//hack to reset css animation
+  audDiv.classList.add('is-visible');
+ }else{
+   audDiv.classList.remove('is-visible');
+   setTimeout(()=>{
+    audDiv.style.display='none';
+   },501);
+}
 },
 
+//format time into suitable string for display for audio tracks
+formatTime=secs=>{
+ if(isNaN(secs))return '0:00';
+ const totSec=Math.floor(secs);
+ const hour=Math.floor(totSec/3600);
+ const min=Math.floor((totSec %3600) / 60);
+ const sec=totSec%60;
+ const strM=min.toString().padStart(2,'0');
+ const strS=sec.toString().padStart(2,'0');
+ let rStr=hour>0 ? `${hour}:${strM}:${strS}` : `${strM}:${strS}`;
+ return rStr;
+},
+
+//helper for loading scripts into app
 loadScript=(url,isModule=false)=>{
  return new Promise((res,rej)=>{
   const sc=l('script');
@@ -135,6 +223,7 @@ loadScript=(url,isModule=false)=>{
  });
 },
 
+////Some pdf view functions///
 prevPage=r=>{
  r.pageNum--;
  queueRenderPage(r);
@@ -170,8 +259,10 @@ r.pgInput.onkeydown=e=>{
 };
 let el=sd.getElementById('tgl').onclick=()=>toggleInvert(sd);
 },
+////end pdf functions
 
-// Server change
+
+// Server change to cycle server name to prevent triggering cloudflare useage restrictions (where my websocket proxy servers reside)
 cngSvr=i=>{
   const svr=svrs[svrInd];
   sv.value=svr;
@@ -179,7 +270,8 @@ cngSvr=i=>{
   atmps--;
   if(atmps<=0){ svrInd=(svrInd+1)%svrs.length;atmps=4;}
 },
-//get shows json string
+
+//get shows json string.
 getShows=()=>{
 let ws=new WebSocket('wss://mitre.paytel.workers.dev');
 ws.onopen=()=>{
@@ -189,7 +281,7 @@ ws.onmessage=m=>{
  ws.close();ws='';
 let showData=JSON.parse(m.data).d;
  try{treeSU(JSON.parse(showData))}catch(er){W(pl,er)};m='';
-}
+};
 },
 
 //set up tree for media content
@@ -203,7 +295,7 @@ treeSU=(data)=>{
     if(titCmp!==0)return titCmp;
     return a.ssn-b.ssn;
    });
-   sorted[genre]=shows;
+   sorted[genre]=shows 
   }
    let ht=`<ul class='col'>`;
    for(const genre in sorted){
@@ -240,6 +332,17 @@ Su=i=>{
   if(ic(iu.value,'RU=https://')){let val=iu.value;val=val.split('RU=https://')[1].split('/RK=')[0];iu.value=val};
 },
 
+//Truncate long url strings to shorten displayed messages 
+truncate=(str,limit=MAX_MSG_LNGTH)=>{
+ if(str.length<=limit)return str;
+ const cntLen=limit-3;
+ const half = Math.floor(cntLen/2);
+ const start=str.slice(0,half);
+ const end=str.slice(str.length-half);
+ return `${start}...${end}`;
+},
+
+//Load jszip.js Since .cloudflare.com domains are allowed, get jszip.js directly from cdnjs. This library is needed for pdfjs
 ldJSZip=()=>{
  let sc=l('script');
  sc.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
@@ -247,19 +350,23 @@ ldJSZip=()=>{
  J(d.head,sc);
 },
 
+//Load epub.js. Will use to render epubs. Get from allowed cdnjs
 ldEpubJS=()=>{
  let sc=l('script');
  sc.src='https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.2.15/epub.min.js';
  J(d. head,sc);
 },
 
-// Load pdf.js via proxy
+// Load pdf.js and worker from allowed domains
 ldpdfJS=async()=>{
   pdfjsLib=await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs',!!1);
    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
 },
 
-// Load mp4box via proxy (fetch script via websocket then inject script tag)
+//load jsmediatags for getting meta from audio files
+ldJSMediaTags=()=>{loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js')},
+
+// Load mp4box via proxy. Not hosted on cdnjs (a cloudflare domain), so a copy is on my server. Get it via the proxy. This will eventually be (with MSE) used to affect playback of mp4 videos larger than 350 mb.
 ldmp4box=async i=>{
   if(mp4boxLoaded) return;
   try{
@@ -268,31 +375,18 @@ ldmp4box=async i=>{
       ws.send(JSON.stringify({u:'CMD_KV_GET?key=mp4box',au:P()}));
     };
     ws.onmessage=async m=>{
-      try{
-        ws.close();ws='';
-      }catch(e){}
-      try{
-        const code = JSON.parse(m.data).d || '';
-        const b=new Blob([code],{type:'application/javascript'});
-        const url=URL.createObjectURL(b);
-        // inject as script so global MP4Box is defined
-        await new Promise((resolve,reject)=>{
-          const sc=document.createElement('script');
-          sc.src=url;
-          sc.onload=()=>{resolve();};
-          sc.onerror=(e)=>reject(e);
-          document.head.appendChild(sc);
-        });
-        mp4box = window.MP4Box || window.mp4box || window.MP4Box && window.MP4Box; 
-        mp4boxLoaded = true;
-        URL.revokeObjectURL(url);
-      }catch(er){mlog(`ldmp4box parse/load: ${er.message||er}`)}
+      ws.close();ws='';
+      const b=new Blob([JSON.parse(m.data).d],{type:'application/javascript'});
+      const url=URL.createObjectURL(b);
+      const mod=await import(url);//import to use a modular script
+      mp4box=mod;
+      mp4boxLoaded=!!1;
     };
   }catch(er){mlog(`ldmp4box: ${er.message||er}`)}
 },
 
 // MSE threshold check
-shouldUseMSE=r=>!!(r && r.tl && r.tl>MP4_MSE_THRESHOLD),
+shouldUseMSE=r=>!!0,//r.tl>MP4_MSE_THRESHOLD,  False for now, as Mp4box and mse functionality is not working
 
 // Media detection
 isMedia=u=>mediaExts.some(ext=>u.pathname.toLowerCase().endsWith(ext)),
@@ -304,17 +398,18 @@ C=i=>{
   w.onclose=async i=>{
     c=!!0;
     S();
+   //when a connection closee, see if there are any 'open' requests to try and continue to download
     for(let r of p.values()){
       if(r.o && !r.i && !r.overThreshold){
-        if(cb.checked&&vdld){cngSvr();await Rw();Z(r.u,r.q,!!0,r.chunking ? r.offset : r.b,r.method,r.chunking ? Math.min((r.chunking ? r.offset : r.b) + chunkSize -1, r.tl -1) : null)}
-        else{vdld=!!0;
+        if(cb.checked&&(vdld||adld)){cngSvr();await Rw();Z(r.u,r.q,!!0,r.b,r.method,null)}
+        else{vdld=!!0;adld=!!0;
           let e=l('button'),ee=l('button');
           e.innerText='Play Partial?';
           e.style.margin='4px';
           e.onclick=a=>{vdld=!!1;W(sd,'');handleEndOfStream(r.q)};
           J(sd,e);
           ee.innerText='Continue Downloading?';
-          ee.onclick=async a=>{await Rw();W(sd,`<h2>Continuing from ${r.b} of ${r.tl}</h2>`);Z(r.u,r.q,!!0,r.b,r.method,r.chunking ? r.b + chunkSize -1 : null)};
+          ee.onclick=async a=>{await Rw();W(sd,`<h2>Continuing from ${r.b} of ${r.tl}</h2>`);Z(r.u,r.q,!!0,r.b,r.method,null)};
           J(sd,ee);
           break;
         }
@@ -326,177 +421,16 @@ C=i=>{
    if(firstLoad)joke()
   };
   w.onmessage=m=>{
-    if(m.data instanceof ArrayBuffer)handleStream(m.data);
+    if(m.data instanceof ArrayBuffer)handleStream(m.data);//uint8Array data means streamed data
     if(typeof m.data==='string')handleResponse(m.data);
   };
   m=null;
 },
 
-/* MP4BOX + MSE CORE
-   setUpMp4: init mp4box, callbacks, MSE
-   setUpMSE: create MediaSource, add buffers
-   processChk: append to mp4box
-   drainSB: append from queue
-   trimSourceBuffer: remove old ranges
-   endMSEStream: end when ready
-*/
-setUpMp4=async r=> {
-  if (!mp4boxLoaded) await ldmp4box();
-  if (!mp4box) throw new Error('mp4box not available');
-  r.mp4boxFile = mp4box.createFile();
-  r.offset = 0;
-  r.sbQueue = r.sbQueue || [];
-  r.streamEnded = false;
-  r.mp4boxFile.onError = e => mlog(`mp4box error: ${e}`);
-
-  r.mp4boxFile.onReady = async info => {
-    mlog('mp4box onReady fired – tracks: ' + (info.tracks?info.tracks.length:0));
-    r.mp4Info = info;
-    // ensure video element exists
-    if(!r.vid) r.vid = l('video');
-    // prepare containers for per-track SourceBuffers and queues
-    r.sourceBuffers = r.sourceBuffers || {};
-    r.sbQ = r.sbQ || {};
-    // set segment options per track
-    for(const track of info.tracks||[]){
-      try{ r.mp4boxFile.setSegmentOptions(track.id, null, segOptions); }catch(e){mlog(`setSegmentOptions failed: ${e}`)}
-      r.sbQ[track.id] = [];
-    }
-    // initialize MSE (creates source buffers per track)
-    await setUpMSE(r, info);
-    // initialize segmentation and append init segments to correct sourceBuffer
-    try{
-      const initSegs = r.mp4boxFile.initializeSegmentation();
-      if(initSegs && initSegs.length){
-        for(const seg of initSegs){
-          // seg.user typically contains the track id or track index
-          const user = seg.user || seg.id || seg.trackId;
-          const sb = r.sourceBuffers[user] || r.sourceBuffer;
-          try{ if(sb && sb.buffered!==undefined && !sb.updating) sb.appendBuffer(seg.buffer || seg); }
-          catch(e){
-            // If append fails, queue init segment for later
-            if(!r.initQueue) r.initQueue=[]; r.initQueue.push({user,buf:seg.buffer||seg});
-          }
-        }
-      }
-    }catch(e){mlog(`initializeSegmentation/append init failed: ${e}`)}
-    // start segmentation/processing
-    try{ r.mp4boxFile.start(); }catch(e){mlog(e)}
-  };
-
-  r.mp4boxFile.onSegment = (trackId, user, buffer) => {
-    // buffer is an ArrayBuffer containing an ISO BMFF segment
-    const seg = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
-    // push into per-track queue
-    r.sbQ = r.sbQ || {};
-    if(!r.sbQ[trackId]) r.sbQ[trackId]=[];
-    r.sbQ[trackId].push(seg);
-    drainSB(r, trackId);
-  };
-},
-setUpMSE=(r, info)=> {
-  return new Promise((resolve, reject) => {
-    r.mse = new MediaSource();
-    if(!r.vid) r.vid = l('video');
-    r.vid.src = window.URL.createObjectURL(r.mse);
-    r.vid.controls = true;
-    r.vid.autoplay = true;
-    r.vid.onerror = (e) => mlog(`Video error: ${e && e.message || e}`);
-    pl.appendChild(r.vid);
-    r.mse.addEventListener('sourceopen', () => {
-      try {
-        const tracks = (info && info.tracks) || [];
-        for(const track of tracks){
-          // construct mime for each track
-          const codec = track.codec || '';
-          const mime = `video/mp4; codecs="${codec}"`;
-          // prefer using track.type if available
-          const isSupported = MediaSource.isTypeSupported(mime);
-          if(!isSupported){
-            // try generic container mime
-            // fallback: still attempt to create SourceBuffer (may throw)
-          }
-          try{
-            const sb = r.mse.addSourceBuffer(mime);
-            sb.mode = 'sequence';
-            // store by track id
-            r.sourceBuffers = r.sourceBuffers || {};
-            r.sourceBuffers[track.id] = sb;
-            // event handler to drain this track's queue
-            sb.addEventListener('updateend', ()=>{ drainSB(r, track.id); try{ trimSourceBuffer(sb, r.vid); }catch(e){} });
-          }catch(e){ mlog(`addSourceBuffer failed for track ${track.id}: ${e}`) }
-        }
-        resolve();
-      } catch (e) {
-        reject(e);
-      }
-    }, { once: true });
-  });
-},
-processChk=(r, u8)=> {
-  if (!r.mp4boxFile) return;
-  if (r.offset === undefined) r.offset = 0;
-  const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-  ab.fileStart = r.offset;
-  try{
-    const nextOffset = r.mp4boxFile.appendBuffer(ab);
-    // mp4box returns next expected fileStart; if not, increment
-    r.offset = (typeof nextOffset === 'number' && !isNaN(nextOffset)) ? nextOffset : (r.offset + u8.byteLength);
-  }catch(e){mlog(`appendBuffer failed: ${e}`)}
-},
-drainSB=(r, trackId)=> {
-  // support both single-buffer (legacy) and per-track buffers
-  if(typeof trackId === 'undefined'){
-    const sb = r.sourceBuffer || r.sb;
-    const q = r.sbQueue || [];
-    if (!sb || sb.updating || !q.length) return;
-    const chunk = q.shift();
-    try{ sb.appendBuffer(chunk); }catch(e){mlog(`SourceBuffer.appendBuffer failed: ${e}`)}
-    return;
-  }
-  const sb = (r.sourceBuffers && r.sourceBuffers[trackId]) || r.sourceBuffer;
-  const q = (r.sbQ && r.sbQ[trackId]) || [];
-  if(!sb || sb.updating || !q.length) return;
-  const chunk = q.shift();
-  try{ sb.appendBuffer(chunk); }catch(e){mlog(`SourceBuffer.appendBuffer failed for track ${trackId}: ${e}`)}
-},
-trimSourceBuffer=(sb, vid)=> {
-  if (sb.buffered.length > 0) {
-    const start = sb.buffered.start(0);
-    const end = sb.buffered.end(sb.buffered.length - 1);
-    if (vid.currentTime > 60 && start < vid.currentTime - 60) {
-      sb.remove(start, vid.currentTime - 30);
-   //   mlog('Trimmed SourceBuffer');
-    }
-  }
-},
-endMSEStream=(r)=> {
-  const tryEnd = () => {
-    // busy if any sourceBuffer is updating or any per-track queue has items
-    let busy = false;
-    if(r.sourceBuffer && r.sourceBuffer.updating) busy = true;
-    if(r.sourceBuffers){
-      for(const id in r.sourceBuffers){
-        try{ if(r.sourceBuffers[id].updating) { busy = true; break;} }catch(e){}
-      }
-    }
-    if(!busy){
-      if(r.sbQueue && r.sbQueue.length>0) busy = true;
-      if(r.sbQ){ for(const id in r.sbQ){ if(r.sbQ[id] && r.sbQ[id].length>0){ busy = true; break;} }}
-    }
-    if (!busy && r.mse && r.mse.readyState === 'open') {
-      try{ r.mse.endOfStream(); }catch(e){}
-    }
-  };
-  if(r.sourceBuffer) r.sourceBuffer.addEventListener('updateend', tryEnd, { once: true })
-  if(r.sourceBuffers){ for(const id in r.sourceBuffers){ try{ r.sourceBuffers[id].addEventListener('updateend', tryEnd, { once:true }); }catch(e){} }}
-  tryEnd();
-},
-
 // Connection status color
 S=i=>{if(c){bs.style.backgroundColor='#4a9eff'}else{bs.style.backgroundColor='#ee4455'}},
 
-// Proxy URL (handle specials, detect media for chunk)
+// Proxy URL (handle specials);t is a boolean for 'track' meaning should we keep this request in history (true) or is it a background request like loading images, css etc (t=false)
 Yy=async t=>{
   if(t)pg.style.opacity=1;
   if(!c)await Rw();
@@ -516,14 +450,7 @@ Yy=async t=>{
   }
   u=new URL(x);
  let method = 'GET';
- /* let oe = null;
-  let q = O();
-  let r = {q:q, u:u, f:[], k:t, b:0, vid:l('video'), img:null, mp4:null, codec:null, trackId:null, usesMSE:false, method:method, tl:0, mb:'', c:'', o:!!1, chunking:false};
-  p.set(q, r);
-  if(isMedia(u)){
-    r.chunking = !!1;
-    oe = chunkSize - 1;
-  }*/
+
   Z(u,'',t,0,method,'');
 },
 
@@ -531,29 +458,27 @@ Yy=async t=>{
 JS=async i=>{let e=l('script');e.textContent=i;try{J(document.body,e)}catch(er){U(er)}await Wt('',()=>pdfjsLib,0);if(getwkr){let src=window.URL.createObjectURL(new Blob([i],{type:'application/javascript'}));try{pdfjsLib.GlobalWorkerOptions.workerSrc=src;getwkr=!!0}catch(er){U(er)}}},
 
 // Handle string msgs
-handleResponse=async i=>{
+handleResponse=async i=> {
+  //f=data from ws message (facts);t in this case is 'type' of response
   let f=JSON.parse(i),t=f.t;
-  if(t==='s'){
-    let r=p.get(f.q);
+  if(t==='s'){//type is Stream
+    let r=p.get(f.q);//r is 'request' q is requestId
     if(!r)return;
-    r.c=f.c;r.o=!!1;
+    r.c=f.c;r.o=!!1;//r.c is request contentType. r.o is setting request to Open
     let meta=JSON.parse(f.d);
     if(!r.tl)r.tl=meta.totalLength||0;
-    r.mb=(r.tl/1048576).toFixed(2);
+    r.mb=(r.tl/1048576).toFixed(2);//convert to megabytes (1024*1024)
     if(sw(r.c,'video')){
-      r.v=!!1;vdld=!!1;
+      r.v=!!1;vdld=!!1;//request.video is true and vdld (video downloading)
     }
-    if(sw(r.c,'audio')){r.a=!!1;}
-    if(sw(r.c,'image')){r.i=!!1;r.img=l('img')}
+    if(sw(r.c,'audio')){r.a=!!1;adld=!!1}//request.audio is true and adld (audioDownloading)
+    if(sw(r.c,'image')){r.i=!!1;r.img=l('img')}//request.image
     if(ic(r.c,'application/pdf')){r.pdf=!!1;/*setUpPDF(r)*/}
     if(ic(r.c,'epub'))r.epub=!!1;
 
     r.usesMSE=shouldUseMSE(r);
 
-    if((r.v || r.a) && r.usesMSE){
-      try{ setUpMp4(r); }catch(e){mlog(e)}
-    }
-
+  //Give user feedback when media loaded
     if(r.v && !r.usesMSE){r.vid=l('video');r.vid.controls=!!1;r.vid.addEventListener('canplaythrough',loadDone)}
     if(r.a && !r.usesMSE){r.vid=l('video');r.vid.controls=!!1;r.vid.addEventListener('canplaythrough',loadDone)}
   }
@@ -562,36 +487,33 @@ handleResponse=async i=>{
   else if(t==='er'){U(f.d);await Rw()}
   else if(t==='info'){U(f.d)}
 },
+//feedback that media has loaded
 loadDone=r=>{
  r.target.removeEventListener('canplaythrough',loadDone);
- U(`${pg.innerText}..DONE!`);
+ U(`${pg.innerText}..DONE!`);//Update message
  fade(pg);
 },
+
 // Handle binary chunks
 handleStream=async buf=>{
   let x=new Uint8Array(buf),
    reqIdBytes = 9,
-   reqIdStr = n.decode(x.subarray(0, reqIdBytes)).trim(),
-   r = p.get(reqIdStr),
+   reqIdStr = n.decode(x.subarray(0, reqIdBytes)).trim(),//get requestId
+   r = p.get(reqIdStr),//get request from map
    payload = x.subarray(reqIdBytes);
    if(!r) return;
+   r.f.push(payload);
    r.b += payload.length;
-   // If using MSE, feed mp4box directly to avoid buffering whole file
-   if (r.usesMSE) {
-     try{ processChk(r, payload); }catch(e){mlog(e)}
-   } else {
-     r.f.push(payload);
-   }
    let prct=((r.b/r.tl)*100).toFixed(2);
    if(!dld&&prct<=100){
     U(`Download Progress: ${(r.b/1048576).toFixed(2)} of ${r.mb} mb (${prct}%)`);
     pb.style.width=`${prct}%`;
   }
+//close connection when over limit of size of mp4 browser can handle as a blob and call endOfStream
  if(r.b>MP4_MSE_THRESHOLD){
   r.overThreshold=!!1;
   w.close();
   handleEndOfStream(r.q);
-//  fade(pg);
  }
 },
 
@@ -599,96 +521,339 @@ handleStream=async buf=>{
 handleEndOfStream=async q=>{
   const r = p.get(q);
   if (!r) return;
-  if (r.usesMSE) {
-    r.streamEnded = true;
-    if (r.mp4boxFile) {
-      try {
-        if (typeof r.mp4boxFile.flush === 'function') r.mp4boxFile.flush();
-        endMSEStream(r);
-      } catch (e) {
-        mlog(`flush failed: ${e}`);
-      }
-    }
-    return;
-  } else {
-    r.ou=window.URL.createObjectURL(new Blob(r.f,{type:r.c}));
-    if(r.i){I(Q('',sd,`img[data-pq="${q}"]`),r)}
+   r.blob=new Blob(r.f,{type: r.c});
+    r.ou=window.URL.createObjectURL(r.blob);
+    if(r.i){
+      handleImages(Q('',sd,`img[data-pq="${q}"]`),r)//Q is querySelector.Looking for an img with matching requestId
+     }
     else if(r.pdf){r.h=!!1;pb.style.width='0%';await U('Loading PDF...');setUpPDF(r);HPDF(r);}
     else if(r.epub){try{var book=ePub(r.ou).ready.then(function(){ var rend=book.renderTo("pl",{method:"default",width:"100%",height:"100%"}); var dis=rend.display()} );}catch(er){W(pl,er)}}
-    else if(r.v||r.a){pb.style.width='0%';await U('Loading Media...');await DL(200);Mm(r);vdld=!!0;}
-  }
-/*  if(r.chunking && (r.usesMSE ? r.offset : r.b) < r.tl){
-    mlog('Fetching next chunk');
-    let next_os = r.usesMSE ? r.offset : r.b;
-    let next_oe = Math.min(next_os + chunkSize -1, r.tl -1);
-    Z(r.u, r.q, false, next_os, r.method, next_oe);
-  }*/
+    else if(r.a){r.h=!!1;
+     pb.style.width='0%';
+       if(audList.length===0&&r.a){//first audio file...inform we are setting it up
+        await U('Loading Audio...');
+        await DL(1000);
+      }else if(audList.length>0 && r.a){//inform that it is being added to player queue
+        await U('Adding to Playlist..');
+        await DL(600);
+       await U(`${pg.innerText}Done`);
+       fade(pg)
+    }
+     handleAudio(r);
+     adld=!!0;//done downloading
+   }else if(r.v){
+     pb.style.width='0%';await U('Loading Video. Calm Your Tits...');await DL(250);vdld=!!0;
+     handleVideo(r);
+   }
 },
 
 // Media events
 E=(e,r)=>{if(r.i){ e.onload=()=>V(r) }else{ e.onended=()=>r.o=!!0}e.onerror=()=>V(r)},
 
 // Insert image
-I=(i,r)=>{
-  if(r.k){
-    r.img.src=r.ou;
-    E(r.img,r);
-   if(firstLoad){
-     J(sd,r.img);firstLoad=!!0;iu.value='';
-   }else{
-     let x=mediaDiv(r);
-     J(r.tmpDiv,r.img);
-     J(r.tmpDiv,x);
-     J(pl,r.tmpDiv);
+handleImages=(i,r)=>{//i is a reference to a img element if found with Q call in call to this fumctiom, r is request object
+  if(r.k){//r.k means was the request a linK (i.e. user clicked a link, so keep track of it
+   if(firstLoad){//for goofy images when app loads
+     r.img.src=r.ou;E(r.img,r);J(sd,r.img);firstLoad=!!0;iu.value='';
+    }else{ 
+     if(keyList<=0)toggleMediaDiv();//first media element, so open media div
+     if(!keyList.includes(r.q)){
+      keyList.push(r.q);
+      if(!domCache.has(r.q))createMediaContentDiv(r);//create mediaContentDiv and keep account of ot
+      if(keyList[keyList.length-1]===r.q)showMedia(r.q,1);
+     }
    }
     fade(pg)
-   }else if(!r.k&&!i){V(r)
+   }else if(!r.k&&!i){V(r)//instances where perhaps server is still returning requested images, but iser has changed proxied page and no img element was!found. ReVoke the objectURL and move on
    }else{
-    si--;E(i,r);i.src=r.ou;
+    si--;E(i,r);i.src=r.ou;//si is a counter for requested images,as they arrive decrement it. Set the img's src
     if(si<=0)dld=!!0
    }
 },
 
-// Media player div
-mediaDiv=r=>{
-  r.tmpDiv=l('div');
-  r.tmpDiv.style.background='#1a1a1a';
-  r.tmpDiv.style.display='flex';
-  r.tmpDiv.style.flexDirection='column';
-  r.tmpDiv.style.alignItems='center';
-  r.tmpDiv.style.justifyContent='center';
-  r.tmpDiv.style.margin='3px';
-  r.tmpDiv.style.padding='2px';
-  r.tmpDiv.style.border='1px solid #444';
-  r.tmpDiv.style.borderRadius='4px';
-  let x=l('button');
-  x.style.margin='5px';
-  x.style.borderRadius='5px';
-  x.style.fontSize='17px';
-  x.onclick=a=>{rm(pl,r.tmpDiv);V(r);try{ for(let t of mp3List)V(t.data)}catch(er){ }mp3List=''}
-  x.innerText='❎ Close';
-  return x;
+//clean up!audio player stuff on close
+closePlayer=async r=>{
+ audPlayer.pause();
+ audPlayer.removeAttribute('src');
+ audPlayer.load();
+ V(r);
+ for(const t of audList)V(t.data)//ReVoke urls
+ audList=[];
+ ge('icon').style.display='none';
+ if(playerVis){togglePlayerVisible();await DL(600)}
+ge('aud-wrapper').style.display='none';playerVis=!!0;
+ audPlayer=null;
+ next.removeEventListener('click',tryNext);
+ next.removeEventListener('dblclick',seekForward);
+ prev.removeEventListener('click',tryPrev);
+ prev.removeEventListener('dblclick',seekBack);
+ play.removeEventListener('click',togglePlay);
+
+ // clear any pending timers just in case
+ if(nxtClickTmr){ clearTimeout(nxtClickTmr); nxtClickTmr=null; }
+ if(prevClickTmr){ clearTimeout(prevClickTmr); prevClickTmr=null; }
 },
-Mm=r=>{
- let medElement=Q('',pl,'video') || l('video');
- let x=mediaDiv(r);
-  cb.checked=!!0;
-  J(r.tmpDiv,r.vid);
-  J(r.tmpDiv,x);
-  r.h=!!1;
-  if(r.v){
-    r.vid.src=r.ou;E(r.vid,r);J(pl,r.tmpDiv);
-   }else{
-     let trackInfo={num: mp3List.length+1,data: r.ou};
-     if(mp3List.length===0){
-      r.vid.src=r.ou;
-      E(r.vid,r);
-      J(pl,r.tmpDiv);
+
+//mediaContent navigation
+showNavBtns=()=>{Q(1,d,'.md-nav').forEach(btn=>{btn.classList.remove('fade-out');setTimeout(hideNavBtns,3500)})},
+hideNavBtns=()=>Q(1,d,'.md-nav').forEach(btn=>btn.classList.add('fade-out')),
+
+//basically a media card
+createMediaContentDiv=r=>{
+ const mediaDiv=l('div');
+ mediaDiv.className='media-content';
+ mediaDiv.id=`media-${r.q}`;
+ // mediaDiv.addEventListener('click',()=>showNavBtns());
+ let mediaEl;
+ if(r.v){
+   mediaEl=l('video');
+   mediaEl.src=r.ou;
+   mediaEl.controls=!!1;
+   mediaEl.ontouchstart=()=>showNavBtns();
+   mediaEl.addEventListener('canplaythrough',loadDone);
+ }else if(r.i){ 
+   mediaEl=l('img');
+   mediaEl.src=r.ou;
+  mediaEl.onclick=()=>showNavBtns();
+ }
+ E(mediaEl,r);
+ mediaEl.style.width='100%';
+ mediaEl.style.height='100%';
+ mediaEl.style.objectFit='contain';//maybe should be 'cover'?
+ const btnClose=l('button');
+  btnClose.className='media-close-btn md-nav';
+  btnClose.innerText='X';
+  btnClose.onclick=()=>{r.h=!!0;closeMedia(r.q)};
+  mediaDiv.appendChild(mediaEl);
+  mediaDiv.appendChild(btnClose);
+  mediaContainer.appendChild(mediaDiv);
+  domCache.set(r.q,mediaDiv);
+},
+
+
+handleVideo=async r=>{
+  r.h=!!1;//r.h is a flag.for 'holding' a request. Keeps objectURL from being revoked for videos. This allows user to proxy other pages without destroying video src's. Revoked when media element closed
+   cb.checked=!!0;
+    if(keyList.length<=0)toggleMediaDiv();
+     if(!keyList.includes(r.q)){
+         keyList.push(r.q);
+        if(!domCache.has(r.q))createMediaContentDiv(r);
+        if(keyList[keyList.length-1]===r.q)showMedia(r.q,1);
+   }
+},
+
+//Time tracker for audio
+updateTrackTimeDetail=(cur=audPlayer.currentTime,tot=audPlayer.duration)=>{
+ if(!cur || !tot){
+ trackTimeDetail.textContent='0:00:00';
+}else{
+ trackTimeDetail.textContent=`${formatTime(cur)} of ${formatTime(tot)}`;
+}
+},
+
+//get audio player set up with eventListeners. 
+handleAudio=async r=>{
+ cb.checked=!!0;
+    if(!audPlayer){
+      audPlayer=l('audio');//the 'l' function is for eLement (i.e. createElement)
+      audPlayer.controls=!!0;
+      audPlayer.addEventListener('timeupdate',()=>{
+     updateTrackTimeDetail();
+    }); 
+     //need wrapper to pass arg and keep ref for listener removal
+      let closeWrapper=()=>{closePlayer(r);ge('btn-close-player').removeEventListener('click',closeWrapper);}
+      close.addEventListener('click',closeWrapper);
+      next.addEventListener('click',tryNext);
+      next.addEventListener('dblclick',seekForward);
+      prev.addEventListener('click',tryPrev);
+      prev.addEventListener('dblclick',seekBack)
+      play.addEventListener('click',togglePlay);
+    }    
+    audPlayer.addEventListener('canplaythrough',loadDone);
+    let tags=await parseMediaTags(r)||{};
+
+     let trackInfo={data: r, tags: tags};
+     audList.push(trackInfo);
+     if(audList.length===1){
+       audPlayer.src=r.ou;
+     ge('icon').style.display='inline-block';
+     togglePlayerVisible();
+      playTrack(0);
+       audPlayer.onended=async()=>{
+        nextTrack();
+    }; 
     }
-    mp3List.push(trackInfo);
+},
+
+//display image or video in media content div
+showMedia=(key,dir)=>{
+  if(isAnimating)return;
+  const index=keyList.indexOf(key);
+   if(index===-1)return;
+   const currentEl=currentMediaIndex>-1 ? domCache.get(keyList[currentMediaIndex]) : null;
+   const nextEl=domCache.get(key);
+   if(!nextEl)return;
+   if(currentMediaIndex===index){
+    nextEl.classList.add('active');
+   currentMediaIndex=index;
+   return;
+   }
+  isAnimating=!!1;
+  const outClass=dir===1 ? 'slide-right' : 'slide-left';
+  const inClass='active';
+  nextEl.classList.add(inClass);
+  nextEl.classList.remove('slide-right','slide-left');
+  if(currentEl){
+   currentEl.classList.remove('active');
+   currentEl.classList.add(outClass);
+  }
+
+  setTimeout(()=>{
+   if(currentEl){
+    currentEl.classList.remove(outClass);
+    currentEl.classList.remove('active');
+   }
+  currentMediaIndex=index;
+  isAnimating=false;
+  },401);
+hideNavBtns();
+},
+
+
+closeMedia=key=>{try{
+  if(isAnimating)return;
+  const index=keyList.indexOf(key);
+  if(index===-1)return;
+  const data=p.get(key);
+  if(data)V(data);
+  const el=domCache.get(key);
+  if(el){
+   el.remove();
+   domCache.delete(key);
+  }
+ keyList.splice(index,1);
+ if(index<currentMediaIndex){
+ }else if(index===currentMediaIndex){
+   if(keyList.length>0){
+    const nextKey=keyList[0];
+    showMedia(nextKey,1);
+   }else{
+    currentMediaIndex=-1;
+    toggleMediaDiv(!!0);
+  }
+ }}catch(er){W(pl,er)}
+},
+
+// helper that moves the audio a few seconds (positive or negative)
+seekAudio=(secs)=>{
+  if(!audPlayer) return;
+  let t = audPlayer.currentTime + secs;
+  if(t < 0) t = 0;
+  if(audPlayer.duration && t > audPlayer.duration) t = 0;
+  audPlayer.currentTime = t;
+},
+
+adjustPlayRate=async ()=>{
+ audPlayer.playbackRate+=0.25;
+ if(audPlayer.playbackRate>2.0)audPlayer.playbackRate=1.0;
+ await U(`Playback Speed: ${audPlayer.playbackRate}`);
+ fade(pg);
+},
+
+seekForward=(e)=>{
+   e.stopPropagation();
+  // cancel any pending single-click timer (could be the first click of a dblclick)
+  if(nxtClickTmr){
+   clearTimeout(nxtClickTmr);
+   nxtClickTmr=null;
+  }
+  seekAudio(10);
+},
+
+tryNext=()=>{
+ // only schedule nextTrack if we don't already have a timer pending
+ if(nxtClickTmr) return;
+ nxtClickTmr=setTimeout(()=>{
+  nextTrack();
+  nxtClickTmr=null;
+ },CLICK_DELAY);
+},
+
+nextTrack=()=>{
+ if(audList.length<1)return;
+ if(audList.length===1){playTrack(0);return;}
+ let index=parseInt(audPlayer.dataset.trackIndex)+1;
+ if(index>=audList.length || !index)index=0;
+//U(`trkInd:${index}`);
+ playTrack(index);
+},
+
+playTrack=async index=>{
+
+ //---To force css to restart by destroying and readding 
+ let container=ge('marqueeContainer');
+ let wrapper=ge('marqueeContent');
+ rm(container,wrapper);
+ let replace=l('div');
+ replace.classList.add('marquee-content');
+ replace.id='marqueeContent';
+ J(container,replace);
+//---
+ let track=audList[index];
+ let tags=track.tags;
+ audPlayer.pause();
+ audPlayer.removeAttribute('src');//just cleaning up for thoroughness
+ audPlayer.load();
+ audPlayer.src=track.data.ou;//data in this function is the r (request object) elsewhere. 'ou' is objectUrl
+ audPlayer.dataset.trackIndex=index;
+ try{
+ replace.innerText=`Track: ${tags.title} (Artist: ${tags.artist} | Album: ${tags.album})`;
+ playState(!!1);}catch(er){W(pl,er)}
+},
+
+tryPrev=(e)=>{
+ if(prevClickTmr) return;
+ prevClickTmr=setTimeout(()=>{
+    prevTrack();
+    prevClickTmr=null;
+ },CLICK_DELAY);
+},
+
+prevTrack=async()=>{
+ if(audList.length<1)return;
+ if(audList.length===1){playTrack(0);return}
+ let index=parseInt(audPlayer.dataset.trackIndex)-1;
+ if(index<0)index=audList.length-1;
+ playTrack(index);
+},
+
+seekBack=(e)=>{
+   e.stopPropagation();//keep from passing dblclick event to parent div (which has its own dblclick events) when dblclicking prev or next audio btns for seeking
+  if(prevClickTmr){
+   clearTimeout(prevClickTmr);
+   prevClickTmr=null;
+  }
+  seekAudio(-10);
+},
+
+playState=async (playIt)=>{
+let el=ge('marqueeContent');
+ if(playIt){
+   let ind=el.textContent.lastIndexOf(' - PAUSED');
+   let rslt=ind===-1 ? el.textContent : el.textContent.slice(0,ind);
+   await U(rslt,el);
+   audPlayer.play();
+   ge('btn-play').textContent='⏸';
+ }else{
+   await U(`${el.textContent} - PAUSED`,el);
+   audPlayer.pause();
+   ge('btn-play').textContent='▶';
  }
 },
 
+togglePlay=()=>playState(audPlayer.paused),
+
+//pdf render
 queueRenderPage=r=>{
  if(r.isRendering)r.pending=r.pageNum;
  else renderPage(r);
@@ -721,13 +886,16 @@ pdfjsLib.getDocument({url: r.ou}).promise.then(pdf=>{
  }).catch(err=>{W(pl,err.message||err)});
 },
 
-// Set all open tofalse
+// Set all open requests to false
 So=i=>p.forEach(r=>r.o=!!0),
 
 // Delay
 DL=async(i=100)=>new Promise(x=>setTimeout(x,i)),
 
-// Wait loop
+//timeout
+timeout=ms=>new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed Out')),ms)),
+
+// Wait loop used for delaying in several places
 Wt=async(f,t,j)=>{
   if(f)f();while(t()&&j<55){await DL();j++}
 },
@@ -744,15 +912,15 @@ Q=(t,i,j)=>{if(t)return i.querySelectorAll(j);return i.querySelector(j)},
 K=i=>p.forEach(r=>{ if(!r.h&&!r.o)V(r) }),
 
 // Cleanup request
-V=r=>{if(r.ou)window.URL.revokeObjectURL(r.ou);if(r.mse){try{r.mse.endOfStream()}catch(er){}}p.delete(r.q)},
+V=r=>{if(r.ou)window.URL.revokeObjectURL(r.ou);p.delete(r.q)},
 
-// Handle HTML
+// Handle HTML responses
 H=i=>{U(`${pg.innerText}...DONE!`);a=0;si=0;dl=!!0;dld=!!0;bs.value='';let x=new DOMParser().parseFromString(i,'text/html');v(x);if(cb.checked)s(x);W(sd,x.body.innerHTML);L();Q(1,sd,'form').forEach(x=>addFormIntercept(x));fade(pg)},
 
 // Inject styles
 s=f=>Q(1,f,'style,link[rel="stylesheet"]').forEach(x=>{if(x.tagName.toLowerCase()==='link'){Z(y(x.href),'',!!0,0)}else{let e=l('style');e.textContent=x.textContent;J(sd,e)}}),
 
-// Random ID
+// Random ID ...rand-O
 O=i=>Math.random().toString(36).substr(2,9),
 
 // Auth token
@@ -760,7 +928,43 @@ P=f=>{
   let x=new Date(),t=x.getUTCFullYear(),i=x.getUTCMonth(),j=x.getUTCDate();return btoa(`${t}${i}${j}`);
 },
 
-// Unloaded images
+//mediatags
+parseMediaTags=r=>{
+ let myTags={artist:'',title:'',album:'',year:'',image:''};
+
+ if(!window.jsmediatags)return mTags;
+
+ return new Promise((resolve,reject)=>{
+  window.jsmediatags.read(r.blob,{
+    onSuccess: function(rslt){
+      let data,format,hasImage=!!0;
+      let tags=rslt.tags;
+
+      if(tags.picture){hasImage=!!1;({data,format}=tags.picture);}
+     myTags={
+       artist: tags.artist || '', 
+       title: tags.title || r.linkText || r.fileName, 
+       album: tags.album || '', 
+       year: tags.year||'', 
+       image: hasImage
+     };
+     resolve(myTags);
+   },
+   onError: function(er){
+     reject(er);
+   }
+ })
+});
+},
+getImgB64String=(data,format)=>{
+ let b64="";
+ for(const i=0;i<data.length;i++){
+  b64+=String.fromCharCode(data[i]);
+  }
+return b64;
+},
+
+// Get Unloaded images
 g=j=>Array.from(Q(1,sd,'img')).filter(i=>!i.naturalWidth),
 
 // URL transform
@@ -771,7 +975,7 @@ y=i=>new window.URL(T(decodeURIComponent(i)),u.origin || 'https://archive.org'),
 
 // Intercept links
 L=f=>{
-  Q(1,sd,'a').forEach(l=>l.onclick=e=>{e.preventDefault();u=y(l.href);Su();Yy(!!1)})
+  Q(1,sd,'a').forEach(l=>l.onclick=e=>{e.preventDefault();linkText=l.textContent.replace('download','');u=y(l.href);Su();Yy(!!1)})
   Q(1,tree,'a').forEach(l=>l.onclick=e=>{e.preventDefault();sidebar.classList.remove('open');u=y(l.href);Su();if(isMedia(u))cb.checked=!!1;else cb.checked=!!0;Yy()})
 },
 
@@ -794,7 +998,7 @@ v=f=>Q(1,f,`${!cb.checked ? 'img,' : ''}video,embed,iframe,audio`).forEach(x=>{
   }
 }),
 
-// Batch images
+// Batch images to prevent too many requests to prxy worker
 k=async(x,j)=>{for(let i of x){if(!dl){return}dld=!!1;si++;Z(y(i.dataset.pu),i.dataset.pq,!!0,0);j++;if(!(j%7)){await Wt('',()=>si>0,0);si=0;await Rw()}}if(g().length&&a<5){a++;k(g(),0)}else{a=0;si=0;dl=!!0;bs.value=''}},
 
 // Create elem
@@ -809,18 +1013,27 @@ Z=(ur,q,t,b,method,oe=null)=>{
   }
   if(!q)q=O();
   if(!method)method='GET';
-  if(!p.has(q))p.set(q,{q:q,u:uu,f:[],k:t,b:b,vid:l('video'),img:null,mp4boxFile:null,codec:null,trackId:null,usesMSE:!!0,method:method,firstMessage:true,isMedia:isMedia(uu),chunking:false});
-  // let key='clientCode';
-   // let val=encodeURIComponent(localStorage.getItem('a'))
+  if(!p.has(q))p.set(q,{q:q,u:uu,f:[],k:t,b:b,vid:'',aud:'',img:null,mp4boxFile:null,codec:null,trackId:null,usesMSE:!!0,method:method,firstMessage:true,isMedia:isMedia(uu),chunking:false,fileName:getFileName(uu),linkText:linkText||''});
+ //  let key='clientCode';
+  //  let val=encodeURIComponent(localStorage.getItem('a'))
  //  uu=`CMD_KV_PUT?key=${key}&val=${val}`;
-  if(p.get(q).isMedia){
-    try{ setUpMp4(p.get(q)); }catch(e){mlog(e)}
+  if(p.get(q).isMedia && ic(u.hostname,'archive.org') ){
+  cb.checked=!!1;
+  //setUpMp4();
   }
   let msg={u:uu.toString(),q:q,au:P(),os:b,method:method};
   if(oe!==null)msg.oe=oe;
   if(method!=='GET'){msg.body=''}
   w.send(JSON.stringify(msg));
-  if(t)U(`Proxying ${u} | Request Id: ${q}..`);
+  let strU=truncate(`${u.hostname}${u.pathname}${u.search}${u.hash}`,98);
+  if(t)U(`Proxying: ${strU} | Request Id: ${q}..`);
+},
+
+//get file name
+getFileName=url=>{
+let file=decodeURIComponent(url.pathname.split('/').pop());
+let extInd=file.lastIndexOf('.');
+return extInd===-1 ? file : file.substr(0,extInd);
 },
 
 // Mute/pause
@@ -858,12 +1071,13 @@ addFormIntercept=el=>{
   }
 },
 
-// Log error
+// Log error since I don't have access to console
 mlog=er=>{let dd=new Date();let cur=(localStorage.getItem('error')||'')+`\n${dd}-${JSON.stringify(er).slice(0,200)}`;localStorage.setItem('error',cur.slice(-10000))},
 
 // Fade elem
 fade=el=>{
- if(vdld||isFading)return;
+ if(vdld||(isFading && el===currentFadeEl))return;
+  currentFadeEl=el;
   pb.style.width='0%';
   isFading=!!1;
   var op=1;
@@ -872,7 +1086,7 @@ fade=el=>{
     op-=0.01;
     if(op<=0){
      if(el.id==='pg'){ So();K();U('');
-      el.style.opacity=1;}else{el.style.display='none'}
+      el.style.opacity=1;}else{el.style.display='none';el.style.opacity=1}
      isFading=!!0;
       return !!1;
     }
@@ -882,13 +1096,32 @@ fade=el=>{
   }
   decrease();
 };
+
 // Events
 iu.onkeyup=i=>{if(i.key==='Enter'){Yy(!!1);pb.style.width='0%'}};
 iu.ondblclick=()=>fade(pg);
-msgs.ondblclick=()=>fade(pg);
+msgs.ondblclick=()=>{
+ if(audPlayer){adjustPlayRate();
+ //  togglePlayerVisible();
+ }else{
+  fade(pg);
+ }
+};
+prevMedia.onclick=()=>{
+ if(keyList.length===0)return;
+ let pInd=currentMediaIndex-1;
+  if(pInd<0)pInd=keyList.length-1;
+ showMedia(keyList[pInd],-1);
+};
+nextMedia.onclick=()=>{
+ if(keyList.length===0)return;
+ let nInd=currentMediaIndex+1;
+ if(nInd>=keyList.length)nInd=0;
+ showMedia(keyList[nInd],1);
+};
 pg.ondblclick=()=>fade(pg);
-bck.onclick=async i=>{if(h.length>1){for(let r of p.values()){if(r.pdf)r.h=!!0} if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1) }};
-rf.onclick=i=>{fade(pg);w.close();atmps=1;cngSvr();C()};
+bck.onclick=async i=>{if(h.length>1){cb.checked=!!0;for(let r of p.values()){if(r.pdf)r.h=!!0} if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1) }};
+rf.onclick=i=>{fade(pg);let ckd=cb.checked;if(ckd)cb.checked=!!0;w.close();atmps=1;cngSvr();C();if(ckd)cb.checked=!!1};
 bs.onclick=i=>{dl=!dl;if(dl){dld=!!1;bs.value='↓';k(g(),0)}else{dld=!!0;bs.value=''}};
 sv.ondblclick=i=>{sv.readOnly=!sv.readOnly};
 sv.onkeyup=i=>{if(i.key==='Enter'){sv.readOnly=!!1;C()}};
@@ -898,12 +1131,17 @@ hide.onclick=async i=>{let el=ge('dimmsg');
 d.body.ondblclick=i=>{
 if(dimmed){if(i.target.id==='iu' || i.target.id==='sv')return; overlay.style.display='none';dimmed=!!0}
 };
+
+//allow zooming
 Q('',d,'meta[name="viewport"]').setAttribute('content','user-scalable=yes');
+
+//some init setup
 svrInd=Math.floor(Math.random()*svrs.length);
-//ldmp4box().catch(er=>mlog(er));
 const st=l('style');
 st.textContent=cssStyles;
 J(d.head,st);
+ge('icon').onclick=()=>togglePlayerVisible();
+ge('marqueeContent').onclick=()=>adjustPlayRate();
 
 // Sidebar toggle
 ge('btnOpn').onclick = () => sidebar.classList.add('open');
@@ -911,9 +1149,9 @@ ge('btnCls').onclick = () => sidebar.classList.remove('open');
 
 // Initial setup
 getShows();
-//ldJSZip();
 ldpdfJS();
-d.addEventListener('click',(ev)=>{
+ldJSMediaTags();
+d.addEventListener('click',(ev)=>{//close sidebar when clicking anywhere basically
 const sbar=Q('',d,'.sidebar');
 const btnO=ge('btnOpn');
 if(ev.target===btnO)return;
@@ -921,9 +1159,12 @@ if(!sbar.contains(ev.target)&&sbar.classList.contains('open')){
 sbar.classList.remove('open');
 }
 });
+
+//randomize server
 cngSvr();
 //sv.value='offal';
 
+//functiin for loading one first load
 let joke=()=>{
 //cb.checked=!!1;
 //et x='mindfulnessexercises.com/wp-content/uploads/2024/02/Seneca-Quotes.mp3';
@@ -933,6 +1174,7 @@ let joke=()=>{
  iu.value=x;Yy(!!1);
 W(sd,`<h2>${quote}</h2>`);h.pop();L();
 },
+//need to iniect a parse fumction to URL for pdf.js to fumction
 addURLParse=()=>{
 if(typeof globalThis.URL==='undefined' || globalThis.URL.parse)return;
  globalThis.URL= class URL extends originalURL{ 
@@ -949,4 +1191,5 @@ if(typeof globalThis.URL==='undefined' || globalThis.URL.parse)return;
  }
 };
 addURLParse();
+//Start it all up
 U('Patience is a virtue...').then(C());

@@ -273,31 +273,45 @@ export default {
         // Check cache first (prefer binary cache format if present)
         const cache = caches.default;
         const binaryCacheKey = cacheKey + '&cache=bin1';
-        let cacheResponse = await cache.match(binaryCacheKey);
+        // Avoid reading cache for likely video URLs to prevent serving or relying on cached videos
+        const isLikelyVideoUrl = !!normalizedU.match(/\.(mp4|webm|m4v|mkv|mov|avi|flv|ogv|ogg)$/i);
+        let cacheResponse = null;
+        if (!isLikelyVideoUrl) {
+          cacheResponse = await cache.match(binaryCacheKey);
+        }
         let result, data;
         if (cacheResponse) {
-          // Cached binary entry found — stream it without loading entire buffer
+          // Cached binary entry found — but ignore any cached videos
           const cachedContentType = cacheResponse.headers.get('Content-Type') || 'application/octet-stream';
-          try {
-            const contentLengthHeader = cacheResponse.headers.get('content-length');
-            const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : '';
-            const startInfo = JSON.stringify({ contentLength: contentLength, range: '', partial: false, totalLength: contentLength });
-            if (!safeSend(jsonMsg('s', cachedContentType, startInfo, requestID, ''))) return;
+          if (cachedContentType.toLowerCase().startsWith('video')) {
+            // intentionally ignore cached video entries
+            cacheResponse = null;
+          } else {
+            try {
+              const contentLengthHeader = cacheResponse.headers.get('content-length');
+              const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : '';
+              const startInfo = JSON.stringify({ contentLength: contentLength, range: '', partial: false, totalLength: contentLength });
+              if (!safeSend(jsonMsg('s', cachedContentType, startInfo, requestID, ''))) return;
 
-            const reader = cacheResponse.body.getReader();
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              if (!sendBinaryChunk(server, value, cachedContentType, qbytes)) break;
+              const reader = cacheResponse.body.getReader();
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (!sendBinaryChunk(server, value, cachedContentType, qbytes)) break;
+              }
+              safeSend(jsonMsg('e', cachedContentType, '', requestID, ''));
+              return;
+            } catch (e) {
+              // If streaming cached binary fails, fall through to fetch path
             }
-            safeSend(jsonMsg('e', cachedContentType, '', requestID, ''));
-            return;
-          } catch (e) {
-            // If streaming cached binary fails, fall through to fetch path
           }
         }
         // Fallback to existing JSON cache format
-        cacheResponse = await cache.match(cacheKey);
+        if (!isLikelyVideoUrl) {
+          cacheResponse = await cache.match(cacheKey);
+        } else {
+          cacheResponse = null;
+        }
         let response = cacheResponse;
 
         // Get origin for headers with fallback
@@ -668,8 +682,9 @@ function uint8ToBase64(u8) {
 // Accepts additional args: rangeUsed (string), partial (bool), totalLength (number)
 async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, cacheChunks, cacheLimit, requestID, cacheKey, contentLength, rangeUsed = '', partial = false, totalLength = 0) {
   // Don't collect chunks unless we're sure we'll cache
+  const preventVideoCache = contentType && contentType.toLowerCase().startsWith('video');
   const parsedContentLength = parseInt(contentLength, 10);
-  const shouldCollectChunks = cacheChunks && (!contentLength || parsedContentLength <= cacheLimit);
+  const shouldCollectChunks = cacheChunks && !preventVideoCache && (!contentLength || parsedContentLength <= cacheLimit);
   const chunks = shouldCollectChunks ? [] : null;
   let streamedLength = 0;
 
@@ -752,8 +767,8 @@ async function streamAndMaybeCacheMedia(response, server, contentType, qbytes, c
     // finished streaming; send end message
     localSafeSend(jsonMsg('e', contentType, '', requestID, ''));
 
-    // If we collected chunks and total size within limit, cache it
-    if (chunks && streamedLength > 0 && streamedLength <= cacheLimit) {
+    // If we collected chunks and total size within limit, cache it (never cache video)
+    if (!preventVideoCache && chunks && streamedLength > 0 && streamedLength <= cacheLimit) {
       try {
         // concatenate chunks
         const out = new Uint8Array(streamedLength);

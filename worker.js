@@ -463,6 +463,12 @@ export default {
         // Process the response
         contentType = response.headers.get('Content-Type')?.toLowerCase() || '';
         const ce = response.headers.get('Content-Encoding')?.toLowerCase() || '';
+        const contentLengthHeader = response.headers.get('content-length') || '';
+        const contentRangeHeader = response.headers.get('content-range') || '';
+        const contentRangeMatch = contentRangeHeader.match(/\/(\d+)$/);
+        const totalLength = contentRangeMatch ? parseInt(contentRangeMatch[1], 10) : parseInt(contentLengthHeader, 10) || 0;
+        const rangeUsed = fetchOptions.headers.Range || '';
+        const isPartial = Boolean(os > 0 || oe !== null) || Boolean(rangeUsed);
         
   if (!contentType) {
           data = await response.text();
@@ -489,10 +495,10 @@ export default {
             5 * 1024 * 1024,  // 5MB cache limit (reduced to save memory/CPU)
             requestID,
             cacheKey,
-            response.headers.get('content-length') || '',
-            '',
-            false,
-            parseInt(response.headers.get('content-length'), 10) || 0
+            contentLengthHeader,
+            rangeUsed,
+            isPartial,
+            totalLength
           );
         }
         

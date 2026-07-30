@@ -537,7 +537,7 @@ options: (() => {
     nbSamples: 35,
     useToast: false,
     useMediaChunking: false,
-    mediaChunkSize: 1024 * 1024
+    mediaChunkSize: 2 * 1024 * 1024
   };
   const stored = JSON.parse(localStorage.getItem('options') || 'null');
   return stored ? { ...defaults, ...stored } : defaults;
@@ -573,7 +573,16 @@ options: (() => {
 let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','chatt','dark','harley','kazak','light','mitre','omega','offal','osric','phone','skip','sv1','text','trace','truth','turbo','uwtb','wit','bn','br'];
 
  const servers=numberedServers.concat(namedServers);
+ const chunkedMediaServers = numberedServers;
   window.servers = servers;
+  window.numberedServers = numberedServers;
+  window.namedServers = namedServers;
+  window.chunkedMediaServers = chunkedMediaServers;
+  window.getServerList = (socketType = 'text', req = null) => {
+    const S = window.AppState;
+    const useChunkedMediaServers = socketType === 'media' && !!S?.options?.useMediaChunking;
+    return useChunkedMediaServers ? chunkedMediaServers : servers;
+  };
   window.currentUrl = null;
 
   // URL.parse polyfill for PDF.js
@@ -1412,8 +1421,10 @@ window.startBatchDownload = async () => {
 
 // ---------- WebSocket pool helpers ----------
 
-window.prewarmConnection = (idx) => new Promise((resolve, reject) => {
-  const ws = new WebSocket(`wss://${servers[idx]}.paytel.workers.dev`);
+window.prewarmConnection = (idx, socketType = 'text', req = null) => new Promise((resolve, reject) => {
+  const serverList = window.getServerList(socketType, req);
+  const host = serverList[Math.abs(idx) % serverList.length];
+  const ws = new WebSocket(`wss://${host}.paytel.workers.dev`);
   ws.binaryType = 'arraybuffer';
 
   let done = false;
@@ -1537,7 +1548,9 @@ window.createAndConnectWS = (serverIdx, socketType, resumeRequest) => {
     const S = window.AppState;
     const isMedia = socketType === 'media';
     const wsKey = isMedia ? 'wsMedia' : 'ws';
-    const sv = servers[serverIdx];
+    const serverList = window.getServerList(socketType, resumeRequest);
+    const safeIdx = Math.abs(serverIdx ?? 0) % serverList.length;
+    const sv = serverList[safeIdx];
 
     let resolved = false;
     const ws = new WebSocket(`wss://${sv}.paytel.workers.dev`);
@@ -1598,9 +1611,10 @@ window.getNextPoolCandidate = (socketType, fromIdx) => {
   const idxKey = socketType === 'media' ? 'mediaServerIndex' : 'serverIndex';
   const activeIdx = S[idxKey];
   const pool = S.wsPool[socketType];
+  const serverList = window.getServerList(socketType);
   let idx = fromIdx;
-  for (let i = 0; i < servers.length; i++) {
-    idx = (idx + 1) % servers.length;
+  for (let i = 0; i < serverList.length; i++) {
+    idx = (idx + 1) % serverList.length;
     if (idx === activeIdx) continue;
     if (pool.some(p => p.idx === idx)) continue;
     return idx;
@@ -1610,7 +1624,7 @@ window.getNextPoolCandidate = (socketType, fromIdx) => {
     return oldest.idx;
   }
   // fallback if every server is already in use
-  return (fromIdx + 1) % servers.length;
+  return (fromIdx + 1) % serverList.length;
 };
 
 window.prewarmPool = async (socketType) => {
@@ -1624,6 +1638,7 @@ window.prewarmPool = async (socketType) => {
   evictDeadSpares(socketType);
   if (S.wsPool[socketType].length >= max) return; // already full
 
+  const serverList = window.getServerList(socketType);
   const idxKey = socketType === 'media' ? 'mediaServerIndex' : 'serverIndex';
   let cursor = S[cursorKey] ?? S[idxKey];
 
@@ -1631,15 +1646,15 @@ window.prewarmPool = async (socketType) => {
     try {
       let noProgress = 0;
 
-      while (S.wsPool[socketType].length < max && noProgress < servers.length) {
+      while (S.wsPool[socketType].length < max && noProgress < serverList.length) {
         let added = false;
 
-        for (let i = 0; i < servers.length && S.wsPool[socketType].length < max; i++) {
+        for (let i = 0; i < serverList.length && S.wsPool[socketType].length < max; i++) {
           const idx = getNextPoolCandidate(socketType, cursor);
           cursor = idx;
 
           try {
-            const ws = await prewarmConnection(idx);
+            const ws = await prewarmConnection(idx, socketType);
           if (ws.readyState !== WebSocket.OPEN) {//check for open
             noProgress++;
             continue;
@@ -1756,7 +1771,8 @@ window.rotateServer = async (resumeObj = null, socketType = 'text') => {
       activateSocket(spareObj.ws, socketType, resumeObj);
       prewarmPool(socketType).catch(() => {});
     } else {
-      S[idxKey] = (S[idxKey] + 1) % servers.length;
+      const serverList = window.getServerList(socketType);
+      S[idxKey] = (S[idxKey] + 1) % serverList.length;
       let ok = await connectWS(resumeObj, socketType);
       if (!ok && resumeObj) ok = await connectWS(resumeObj, socketType);
     }

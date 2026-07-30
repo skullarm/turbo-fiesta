@@ -1,1549 +1,4633 @@
-//***!!FILE MUST BE EXECUTABLE VIA JAVASCRIPTS'S eval() FUNCTION. I AM AWARE OF CONCERNS WITH IT.!!***
-//This client app sits behind repressive network restrictions that allow no http(s) requests except to .cloudflare.com domains. only websocket connections are permitted//
+localStorage.setItem('9',cd.value);
+//## Section 1: HTML/CSS Shell & Globals
 
-// Globals
-let d=document,w,u,h=[],n=new TextDecoder(),p=new Map(),a=0,si=0,dl=!!0,dld=!!0,c=!!0,svrInd=0,atmps=4,vdld=!!0,adld=!!0,ge=i=>d.getElementById(i),pdfdl=!!0,getwkr=!!0,mp4boxLoaded=!!0,mp4box,isFading=!!0,firstLoad=!!1,cnclFade=!!0,showBase='https://archive.org/download/',archiveBase='https://archive.org/details/',pdfjsLib=null,dimmed=!!0,audList=[],linkText='',currentFadeEl=null,audPlayer=null,nxtClickTmr=null,playClickTmr=null,prevClickTmr=null,playerVis=!!0,currentMediaIndex=-1,keyList=[],domCache=new Map(),isAnimating=!!0,sliderActive=!!0,sliderLongPressTimer=null,sliderIsDragging=!!0,LONG_PRESS_DURATION=500;
-
-//css variable to attach
-const cssStyles = `
-.drag-handle{font-size:2.5em;font-family:sans-serif;margin:1px 3px 1px 3px}
-.track-num{vertical-align:middle;font-size:0.6em}
-button{user-select:none}
-.custom-cb{display:flex;align-items:center;cursor:pointer;user-select:none;border 1px solid #665;padding:12px 16px;border-radius:8px;transform:translateY(3px)}
-.custom-cb input{display:none}
-.checkmark{background-color:#1a1a1a;width:24px;height:24px;border:2px solid #555;border-radius:6px;margin-right:11px;margin-left:-8px;position:relative;transition:all 0.3s ease}
-.checkmark::after{content:"";position:absolute;display:none;left:6px;top:2px;width:8px;height:13px;border:solid white;border-width:0 2px 2px 0;transform:rotate(45deg)}
-.custom-cb input:checked + .checkmark{background-color:#4a9eff;border-color:#4a9eff;box-shadow:0 0 12px rgba(74,148,255,0.6)}
-.custom-cb input:checked + .checkmark::after{display:block}
-.custom-cb input:checked ~ span{color:#fff}
-.msg-container{display: flex; justify-content: space-between;align-items: flex-start; width:100%;padding: 10px 15px;box-sizing: border-box}
-.player-wrapper{display:none;font-size:15px;flex-direction:column;align-items:center;gap:2px;position:relative;transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.68,-0.55,0.27,1.55);opacity:0;transform:translateX(100%);}
-.player-wrapper.is-visible{opacity:1;transform:translateX(0);display:flex;}
-
-.track-marquee{width:100%;overflow:hidden;position:relative;height:18px;border-radius:4px;display:flex;align-items:center;flex-shrink:0}
-.marquee-content{position:absolute;display:inline-block;white-space:nowrap;padding-left:100%;user-select:none;animation:marqueeScroll 18s linear infinite;padding-left:100%/* animation applied only to playlist items that are playing */}
-@keyframes marqueeScroll{0%{transform:translateX(0);} 100%{transform:translateX(-100%);}}
-
-/* playlist-specific marquee behavior */
-.playlist-item .marquee-content{animation:none !important;padding-left:0%}
-.playlist-item.playing .marquee-content{padding-left:100%;animation: marqueeScroll 18s linear infinite !important;}
-
-/* visual indicator when dragging over an item */
-.playlist-item.dragover{border-top:2px solid #4a9eff;}
-
-.col, .col ul {list-style-type: none;padding-left:10px;}
-.col li{padding: 5px}
-.toggle{padding:12px;}
-.toggle::before{display:inline-block;width:17px;content:'➕ ';}
-.toggle.show::before{content:'➖ ';}
-.col ul{display:none;}
-.toggle.show + ul{display:block;}
-.sidebar {position: fixed; left: -300px; top: 0; height: 100%; width: 300px; background: #2a2a2a; padding: 3px; transition: left 0.5s ease; z-index: 100000100;color:#eee; display:flex;flex-direction:column;}
-.sidebar.open { left: 0; }
-#sidebar-options { padding:4px;margin: 10px; border:1px solid #fff}
-#sidebar-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.sidebar-tab{flex:1;display:none;overflow:auto}
-.sidebar-tab.active{display:block}
-#sidebar-treeview { flex:1;padding:3px;margin:5px;color: #eee; max-height:100vh;overflow-y:auto;overflow-x:auto} 
-#sidebar-tabs{display:flex;justify-content:space-around;padding:4px;background:#1a1a1a;border-top:1px solid #444}
-.tab-btn{flex:1;padding:8px 0;background:transparent;;border:none;cursor:pointer;font-size:14px;color:#555}
-.tab-btn.active{border:1px solid #4a9eff;background:rgba(0,0,0,0.8);color:#eee;box-shadow:0 0 10px 2px rgba(74,158,255,0.4);transform:scale(1.03)}
-#sidebar-playlist ul{list-style:none;padding-left:10px;margin:0}
-.playlist-item{display:flex;align-items:center;gap:4px;padding:4px 2px;cursor:pointer}
-.playlist-item .text-wrapper{flex:1;overflow:hidden;position:relative;height:18px}
-.playlist-item .text-wrapper .marquee-content{position:absolute;display:inline-block;white-space:nowrap;/* animation handled by playing state */}
-.remove-btn{margin-left:4px;color:#f88;cursor:pointer}
-.remove-after{margin-left:4px}
-.playlist-item.playing{box-shadow:0 0 7px 2px rgba(74,148,255,0.4);background:#1a1a1a;border-radius:3px}
-
-#btnCls {position: absolute; top: 15px; right: 15px; padding: 10px 15px; background: #444; color: #fff; border: 1px solid #665; border-radius: 4px; cursor: pointer; display: none;}
-.sidebar.open #btnCls {display: inline-block;}
-.sidebar.open #btnOpn {display: none;}
-#overlay {display:none;position:fixed;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,0.7);z-index:100000999;font-family:system-ui,sans-serif;align-items:center;justify-content:center;pointer-events: none}
-#overlay span{background:#222;color:#eee;padding:2em;border-radius:8px;text-align:center;max-width:500px;border: 1px solid #665}
-#pl {background:#1a1a1a;background-color:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;width:100%;height:0vh;overflow:hidden;align-self:center}
-.sticky-header {position:sticky;top:0;z-index:100000099;background:#2a2a2a;color:#eee;padding:8px;font-family:system-ui,sans-serif;border-bottom:1px solid #444;}
-.sticky-header div {display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.sticky-header button, .sticky-header input {padding:6px 12px;background:#444;color:#fff;border:1px solid #665;border-radius:4px;cursor:pointer}
-.sticky-header button:active, span:active{transform:scale(0.95)}
-.sticky-header #iu {flex:1;min-width:200px;background:#1a1a1a;color:#eee;font-family:monospace;font-size:12px}
-.sticky-header #sv {width:80px;padding:4px;background:#1a1a1a;color:#eee;font-size:11px;text-align:center}
-.sticky-header #icon{font-size:1.75em;background:transparent;cursor:pointer;display:none}
-.sticky-header label {cursor:pointer;font-size:12px}
-#msgs {position: relative;width:100%;margin-top:8px;padding:8px;background:#1a1a1a;border-radius:4px;font-size:12px}
-#pg {font-family:monospace;top:0;left:4px;z-index:2;font-weight: bold;font-sizes:15px}
-#pb {position: absolute;bottom:0;left:0;height:10px;background:linear-gradient(to right,#1a1a1a 0%, green 100%);width:0%;transition: width 0.3s ease;z-index:1}
-#ct {display:block;font-family:system-ui,sans-serif;color:#eee;background:#1a1a1a;width:100vw;height:100vh;overflow:auto}
-#ct  div{background:#1a1a1a;flex:1;width:100%;height:100%;overflow:auto}
-#ct img, #ct video {max-width:100%;height:auto;margin:8px 0;border-radius:4px}
-#ct a {color:#4a9eff;text-decoration:none;}
-#ct a:hover {text-decoration:underline}
-#ct h1, #ct h2, #ct h3 {color:#fff;margin:16px 0 8px}
-#ct pre {background:#111;padding:12px;overflow:auto;border-left:3px solid #4a9eff;margin:8px 0}
-#ct button {padding:6px 12px;background:#4a9eff;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold}
-#ct button:hover {background:#5ba4ff}
-.media-content{opacity:0;position:absolute;top:0;left:0;width:100%;height:100%;opacity;0;transition:transform 0.4s ease-in-out;display:flex;justify-content:center;align-items:center;z-index:1;border:1px solid #444;border-radius:4px}
-.media-content.active{opacity:1;transform:translateX(0);z-index:2}
-.slide-left{transform:translateX(-100%);}
-.slide-right{transform:translateX(100%);}
-.animating{transition:transform 0.4s ease-in-out,opacity 0.4s;}
-.media-close-btn{
- opacity:1;
- position:absolute;
- top:10px;right:10px;z-index:100;background:rgba(255,0,0,0.7);color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-weight:bold;}
-#prev-media.fade-out,#next-media.fade-out {opacity:0}
-#prev-media,#next-media{
- opacity:1;
- position:absolute;
- top:50%;
- transform:translateY(-50%);
- background:rgba(255,255,255,0.2);
- border:1px solid rgba(255,255,255,0.5);
- padding:8px;
- cursor:pointer;
- font-size:28px;
- z-index:11}
-.md-nav{transition: opacity 0.6s ease-out;will-change:opacity}
-.md-nav.fade-out{opacity:0}
-#prev-media{left:10px}
-#next-media{right:10px}
-.collapse-button{position:absolute;top:-3px;left:0px;transform:scale(1.75);transform-origin:top left;border:none;background-color:transparent}
-.seek-slider-container{position:fixed;bottom:0;left:0;right:0;height:0;background:#1a1a1a;border-top:2px solid #4a9eff;opacity:0;transform:translateY(100%);transition:opacity 0.2s ease,transform 0.2s ease;z-index:100001000;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0}
-.seek-slider-container.active{height:140px;opacity:1;transform:translateY(0);pointer-events:all;padding:12px}
-.seek-slider-wrapper{width:90%;display:flex;flex-direction:column;align-items:center;gap:10px}
-.seek-slider-label{color:#eee;font-size:13px;text-align:center;white-space:nowrap;font-family:system-ui,sans-serif}
-.slider-track{width:100%;height:8px;background:#444;border-radius:4px;position:relative;cursor:pointer;box-shadow:0 0 6px 2px rgba(74,158,255,0.7)}
-.slider-fill{height:100%;background:#4a9eff;border-radius:4px;pointer-events:none}
-.slider-handle{position:absolute;top:50%;right:0;transform:translate(50%,-50%);width:32px;height:32px;background:#4a9eff;border-radius:50%;box-shadow:0 2px 8px rgba(74,158,255,0.6);cursor:grab;pointer-events:all}
-.slider-handle:active{cursor:grabbing;box-shadow:0 4px 12px rgba(74,158,255,0.8)}
-.seek-slider-time{color:#4a9eff;font-size:14px;font-weight:bold;font-family:monospace;text-align:center}
-`;
-
-// Constants
-const svrs=['osric','wit','bilboes','phone','call','text','kazak','argos','sv1','skip','trace','alice','harley','turbo','truth','uwtb','light','dark'];
-const segOptions={nbSamples:250},
- MP4_MSE_THRESHOLD=380*1024*1024,//files (made into blobs/objectURLs) cause my browser to crash so cutt-off at this point. Will try to fragment mp4's larger than this in the browser as chunks arrive using mp4box.js, then feed segments to mse source buffer that can be trimmed to prevent memory overload. Range requests can pull chunks of large mp4's down and feed through a mp4box.js to mse pipeline, so long as I have initSegs/moov info. Not currently able to do so.
-  SEG_QUEUE_LIMIT=30;//related to mp4box and mse pipeline. Trying to prevent swamping buffer. Not currently used of fully understood
-
-const mediaExts = ['.mp4', '.webm', '.ogv','.mp3','.flac'];
-
-const CLICK_DELAY=450,//double vs single click delay
-  MAX_MSG_LNGTH=100;
-
-// HTML setup for client
-d.body.innerHTML=`
+(function initShell() {
+  const doc = document;
  
-<div id='overlay'><span id='dimmsg'><h2>Double-Tap Anywhere</h2><p><h3>To Turn Dimmer Off</h3></span></div>
-<div id='pl'>
- <button class='md-nav'  id='prev-media'>↩</button>
- <button class='md-nav'  id='next-media'>↪</button>
-</div>
-<div class='sticky-header'>
-<div>
-<button id='btnOpn'>🌫</button>
-<button id='bck'>🔙 BCK</button>
-<button id='rf'>🔄 RF</button>
-<input id='iu' placeholder='https://...' /><span id='icon'>🎶</span>
-<input id='sv' placeholder='SVR' readOnly />
-<label class='custom-cb'>
-<input id='cb' type='checkbox'/><!-- <label for='cb'>Auto</label>-->
-<span class='checkmark'></span>
-<span>Auto</span>
-</label>
-<input id='bs' type='button' />
-<button id='hide'>💡</button>
-</div>
-<div id='msgs' class='msg-container'>
- 
- <span id='pg' class='msg-text'></span>
- <div id='pb'></div>
-<div id='aud-wrapper' class='player-wrapper' style='display:none'>
- <!--<div id='collapseButton' class='collapse-button'>➖</div>-->
-  <div class='duration-wrapper'>
-   <div id='trackTimeDetail'>0:00:00</div>
-  </div>
- <div class='aud-controls' style='display:flex;justify-content:space-between'>
-  <button id='btn-prev'>⏮</button>
-  <button id='btn-play'>▶</button>
-  <button id='btn-next'>⏭</button> | <button id='btn-close-player' styles='justify-content:space-between'>✖</button>
- </div>
- <div id='marqueeContainer' class='track-marquee'>
-  <div id='marqueeContent' class='marquee-content'>
-   Test CntentHere...
-  </div>
- </div>
-</div>
-</div>
-<div id='seekSliderContainer' class='seek-slider-container'>
- <div class='seek-slider-wrapper'>
-  <div class='seek-slider-label'>Slide to seek</div>
-  <div class='slider-track'>
-   <div class='slider-fill' id='sliderFill'></div>
-   <div class='slider-handle' id='sliderHandle'></div>
-  </div>
-  <div class='seek-slider-time'><span id='sliderTime'>0:00</span> / <span id='sliderDuration'>0:00</span></div>
- </div>
-</div>
-</div>
-<div id='ct'></div>
-<div id='sidebar' class='sidebar'>
-<button id='btnCls'style='display:none'> ✖ </button>
-🍿 Clandestine Entertainment  🎵
-<div id="sidebar-content">
-  <div id="tab-shows" class="sidebar-tab active">
-    <div id="sidebar-treeview">LOADING...</div>
-  </div>
-  <div id="tab-music" class="sidebar-tab">
-    <div id="sidebar-playlist" style="padding:10px;color:#ccc">No music added</div>
-  </div>
-</div>
-<div id="sidebar-tabs">
-  <button id="tab-btn-shows" class="tab-btn active">Shows</button>
-  <button id="tab-btn-music" class="tab-btn">Music</button>
-</div>
-</div>
-`;
-
-const originalURL=globalThis.URL;//for adding parse to URL class
-
-// Element refs
-let bck=ge('bck'),iu=ge('iu'),rf=ge('rf'),sv=ge('sv'),cb=ge('cb'),hide=ge('hide'),pg=ge('pg'),overlay=ge('overlay'),bs=ge('bs'),pl=ge('pl'),ct=ge('ct'),msgs=ge('msgs'),pb=ge('pb'),sidebar=ge('sidebar'),tree=ge('sidebar-treeview'),trackDetails=ge('trackDetails'),prev=ge('btn-prev'),next=ge('btn-next'),close=ge('btn-close-player'),play=ge('btn-play'),audDiv=ge('aud-wrapper'),prevMedia=ge('prev-media'),nextMedia=ge('next-media'),mediaContainer=ge('pl'),trackTimeDetail=ge('trackTimeDetail'),seekSliderContainer=ge('seekSliderContainer'),sliderHandle=ge('sliderHandle'),sliderFill=ge('sliderFill'),sliderTrack=ge('sliderTrack')||ge('slider-track'),sliderTime=ge('sliderTime'),sliderDuration=ge('sliderDuration'),sliderTrackEl=d.querySelector('.slider-track');
-
-// Shadow DOM
-let sd=ct.attachShadow({mode:'open'});
-sd.innerHTML='<style>:host{all:initial}*{box-sizing:border-box};</style>';
-
-//to put pdf's in and out of 'dark' mode
-let toggleInvert=root=>{
- let el=root.getElementById('cvspdf');
- if(el.style.filter.includes('invert')){
-  el.style.filter='none';
- }else{
-   el.style.filter='invert(1) grayscale(20%)';
- }
-};
-
-//html for my simple pdf viewer
-let pdfHTMLStr=`
-<DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>PDF Viewer</title>
-</head>
-<body>
-<div style='background-color:#2a2a2a'>
-<span style='font-size:17'>Page <input type="number"  id="pg" min="1" value=1 style="width:4%; font-size:17"> of <span id="pgcnt" style="font-size:17">-1</span></span>   <button id='tgl'>Mode</button>
-</div>
-<canvas id="cvspdf" style="filter: invert(1) grayscale(20%)"></canvas>
-</body>
-`;
-// Some Utils
-let U=(i,el=pg)=>new Promise((res)=>{ el.style.display='block';el.textContent=i;res(el);}),//Update msgs, etc
-ic=(e,i)=>e.includes(i),//includes
-sw=(e,i)=>e.startsWith(i),//startsWith
-rm=(e,i)=>e.removeChild(i),//remove
-J=(e,i)=>e.appendChild(i),//appendChild (J for JoinTo)
-W=(e,i)=>e.innerHTML=i,//write an elements innerHTML
-
-//show or hide mediaDivc at top of app
-toggleMediaDiv=(show=!!1)=>{if(show)pl.style.height='100vh';else pl.style.height='0vh';},
-
-//show or hide little custom audio player front-end
-togglePlayerVisible=()=>{
- playerVis=!playerVis;
- if(playerVis){
-  audDiv.style.display='flex';
-  void audDiv.offsetWidth;//hack to reset css animation
-  audDiv.classList.add('is-visible');
- }else{
-   audDiv.classList.remove('is-visible');
-   setTimeout(()=>{
-    audDiv.style.display='none';
-   },501);
-}
-},
-
-//format time into suitable string for display for audio tracks
-formatTime=secs=>{
- if(isNaN(secs))return '0:00';
- const totSec=Math.floor(secs);
- const hour=Math.floor(totSec/3600);
- const min=Math.floor((totSec %3600) / 60);
- const sec=totSec%60;
- const strM=min.toString().padStart(2,'0');
- const strS=sec.toString().padStart(2,'0');
- let rStr=hour>0 ? `${hour}:${strM}:${strS}` : `${strM}:${strS}`;
- return rStr;
-},
-
-//helper for loading scripts into app
-loadScript=(url,isModule=false)=>{
- return new Promise((res,rej)=>{
-  const sc=l('script');
-   if(isModule)sc.type='module';
-   sc.src=url;
-   
-   sc.onload=()=>res(window.pdfjsLib);
-   sc.onerror=er=>rej(W(pl,`Failed to load ${url}`));
-   J(d.head,sc);
- });
-},
-
-////Some pdf view functions///
-prevPage=r=>{
- r.pageNum--;
- queueRenderPage(r);
-},
-nextPage=r=>{
- r.pageNum++;
- queueRenderPage(r);
-},
-setUpPDF=r=>{
-r.scale=1.5;r.touchStartX=0;r.touchEndX=0;r.swipeThresh=50;r.pdfDoc=null;r.pageNum=1;r.isRendering=!!0;r.pending=null;r.html=new DOMParser().parseFromString(pdfHTMLStr,'text/html');W(sd,r.html.body.innerHTML);r.canvas=sd.getElementById('cvspdf');r.ctx=r.canvas.getContext('2d');r.pgInput=sd.getElementById('pg');r.cntSpan=sd.getElementById('pgcnt');
-r.canvas.addEventListener('dblclick',e=>{
- e.stopPropagation();
- const {width,height,left,top}=r.canvas.getBoundingClientRect();
- const x=e.clientX-left;
- const y=e.clientY-top;
- if(x<width/3){prevPage(r);return;}
- if(x>(width*2)/3){nextPage(r);return;}
- if(y<height/3){r.scale+=0.2;}
- else if(y>(height*2)/3){r.scale=Math.max(0.3,r.scale-0.2)}
- else{r.scale=1.5}
- queueRenderPage(r);
-});
-r.pgInput.onkeydown=e=>{
- if(e.key==='Enter'){
-  e.preventDefault();
-  let num=parseInt(r.pgInput.value);
+  const css = `
+    :root{--accent:#4a9eff;--bg:#1a1a1a;--surface:#2a2a2a;--text:#eee;--border1:#655}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;}
   
-  if(!isNaN(num) && num>=1 && num<=r.pdfDoc.numPages){
-   r.pageNum=num;
-   queueRenderPage(r);
+ #toastContainer {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000001000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+  max-width: 92vw;
+}
+.toast {
+  background: rgba(30,30,30,0.95);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  font-size: 13px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s cubic-bezier(0.68,-0.55,0.27,1.55);
+  pointer-events: auto;
+  max-width: 80vw;
+  text-align: center;
+}
+
+.toast.show { opacity: 1; transform: translateY(0); }
+
+  
+  #tab-options {
+  position: relative;   /* creates sticky context */
+}
+
+#opt-save {
+  position: sticky;
+  bottom: 0;
+  background: #1f1f1f;   /* opaque so text doesn’t show through */
+  border-top: 1px solid #4a9eff;
+  margin: 12px -10px 0;  /* bleed to edges if you want a full bar */
+  z-index: 10;
+  width: 100%;
+  padding: 10px;
+}
+ .mse-minute-seek {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  pointer-events: auto;
+}
+.mse-minute-seek input {
+  width: 50px;
+  padding: 2px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font-size: 11px;
+  text-align: center;
+}
+.mse-minute-seek button {
+  padding: 2px 6px;
+  font-size: 10px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 3px;
+}
+
+    .drag-handle{font-size:2.5em;font-family:sans-serif;margin:1px 3px;cursor:grab;user-select:none}
+    .track-num{vertical-align:middle;font-size:0.6em}
+    button{user-select:none;cursor:pointer}
+  
+.media-info-box {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 101;
+  background: rgba(0,0,0,0.7);
+  color: #eee;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.3;
+  pointer-events: none;
+  opacity: 0;
+  min-width: 60px;
+  text-align: left;
+  text-shadow: 0 0 2px rgba(0,0,0,0.5);
+  border-width: 2px;
+  border-style: solid;
+  border-color: transparent;
+  transition: opacity 0.35s ease;
+}
+
+.media-info-box.show {
+  opacity: 1;
+}
+
+/* Expanded = full view */
+.media-info-box.expanded {
+  background: rgba(0,0,0,0.7);
+  font-size: 11px;
+  min-width: 140px;
+  transition:
+    opacity 0.2s ease,
+    background 0.2s ease,
+    font-size 0.2s ease,
+    padding 0.2s ease,
+    min-width 0.2s ease,
+    border-width 0.2s ease;
+}
+
+/* Mini view: shrink after the labels have faded out */
+.media-info-box.show:not(.expanded) {
+  background: rgba(0,0,0,0.45);
+  opacity: 0.4;
+  border-width: 0.03125rem;
+  font-size: 8.5px;
+  min-width: 60px;
+  padding: 2px 2px;
+  transition:
+    opacity 0.35s ease,
+    background 0.35s ease 0.45s,
+    font-size 0.35s ease 0.45s,
+    padding 0.35s ease 0.45s,
+    min-width 0.35s ease 0.45s,
+    border-width 0.35s ease 0.45s;
+}
+
+.media-info-box div {
+  margin: 2px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.media-info-box:not(.expanded) div {
+  justify-content: flex-start;
+}
+
+/* Detail / smart rows: disappear first in mini view */
+.media-info-box .detail,
+.media-info-box .smart-only {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease, max-height 0.2s ease;
+}
+
+.media-info-box.expanded .detail {
+  max-height: 60px;
+  opacity: 1;
+}
+
+.media-info-box.expanded.show-smart .smart-only {
+  max-height: 60px;
+  opacity: 1;
+}
+
+/* Labels: fade after detail rows are gone, then shrink */
+.media-info-box label {
+  font-weight: normal;
+  opacity: 0;
+  pointer-events: none;
+  max-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.25s ease 0.25s, max-width 0.2s ease 0.45s;
+  margin-right: 2px;
+}
+
+.media-info-box.expanded label {
+  opacity: 0.8;
+  max-width: 120px;
+  transition-delay: 0s;
+}
+
+/* Values: slide left once the label fade completes */
+.media-info-box .value {
+  font-weight: 600;
+  min-width: 0;
+  text-align: left;
+  transition: text-align 0.25s ease 0.45s, min-width 0.25s ease 0.45s;
+}
+
+.media-info-box.expanded .value {
+  min-width: 56px;
+  text-align: right;
+  transition-delay: 0s;
+}
+
+/* collapse hidden rows completely in mini mode */
+.media-info-box:not(.expanded) div.detail,
+.media-info-box:not(.expanded) div.smart-only {
+  display: none;
+}
+
+/* keep only the rows you want in mini mode tight */
+.media-info-box:not(.expanded) div.time-row,
+.media-info-box:not(.expanded) div.bytes-row,
+.media-info-box:not(.expanded) div.buffer-row {
+  display: flex;
+  margin: 0 0 2px 0;
+}
+
+.media-info-box:not(.expanded) {
+  line-height: 1.05 !important;
+  padding: 1px 4px !important;
+}
+.media-info-box:not(.expanded) div {
+  margin: 0 !important;
+  min-height: 0;
+}
+.media-info-box:not(.expanded) label {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 0 !important;
+  opacity: 0 !important;
+}
+.media-info-box:not(.expanded) .value {
+  min-width: 0 !important;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+.media-info-box.fatal {
+  border-color: #ff0000 !important;
+}
+
+    .custom-cb{display:flex;align-items:center;cursor:pointer;border:none;padding:10px 14px;border-radius:8px;transform: translateY(2px)}
+    .custom-cb input{display:none}
+    .checkmark{background-color:var(--bg);width:24px;height:24px;border:2px solid var(--border1);border-radius:6px;margin-right:11px;position:relative;transition:all 0.3s ease}
+    .checkmark::after{content:"";position:absolute;left:6px;top:2px;width:8px;height:13px;border:solid white;border-width:0 2px 2px 0;transform:rotate(45deg);display:none}
+    .custom-cb input:checked+.checkmark{background-color:var(--accent);border-color:var(--accent);box-shadow:0 0 12px rgba(74,148,255,0.6)}
+    .custom-cb input:checked+.checkmark::after{display:block}
+    
+   #sv{ width:32px;height:32px;border:1px solid #444;border-radius:6px;display:flex;flex-direction:column;overflow:hidden;position: relative;}
+   #sv .sv-top,#sv .sv-bottom{flex:1;width:100%;transition:background-color 0.2s ease}
+   #sv .sv-top{background-color:#3a1a1a;}
+   #sv .sv-bottom{background-color:#3a1a1a}
+   #sv.connected .sv-top{background-color:#1a3a1a}
+   #sv.media-connected .sv-bottom{background-color:#1a3a1a}
+   
+    .msg-container{
+   position: relative;
+   display:flex;
+   justify-content:space-between;
+   align-items:center;
+   width:100%;
+   padding:1px 3px;min-height: 24px
   }
- }
-};
-let el=sd.getElementById('tgl').onclick=()=>toggleInvert(sd);
-},
-////end pdf functions
-
-
-// Server change to cycle server name to prevent triggering cloudflare useage restrictions (where my websocket proxy servers reside)
-cngSvr=i=>{
-  const svr=svrs[svrInd];
-  sv.value=svr;
-  DL();
-  atmps--;
-  if(atmps<=0){ svrInd=(svrInd+1)%svrs.length;atmps=4;}
-},
-
-//get shows json string.
-getShows=()=>{
-let ws=new WebSocket('wss://mitre.paytel.workers.dev');
-ws.onopen=()=>{
- ws.send(JSON.stringify({u:'CMD_KV_GET?key=shows',au:P()}));
-};
-ws.onmessage=m=>{
- ws.close();ws='';
-let showData=JSON.parse(m.data).d;
- try{treeSU(JSON.parse(showData))}catch(er){W(pl,er)};m='';
-};
-},
-
-//set up tree for media content
-treeSU=(data)=>{
-  if(!data)return;
-  const genres=Object.keys(data).sort();
-  const sorted={};
-  for(const genre of genres){
-   const shows=data[genre].sort((a,b)=>{
-     const titCmp= a.title.localeCompare(b.title);
-    if(titCmp!==0)return titCmp;
-    return a.ssn-b.ssn;
-   });
-   sorted[genre]=shows 
+  #pg {
+     font-family: monospace;
+    font-size:12px;
+     color: var(--accent);
+    z-index: 2;
+    flex:1
+   }
+   #pg2{
+   font-family: monospace;
+    font-size: 12px;
+   color: #ffaa44;
+   z-index:2;
+   margin-left:8px;
+   padding-left: 8px;
+   max-width:50%;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
   }
-   let ht=`<ul class='col'>`;
-   for(const genre in sorted){
-     ht+=`<li>${genre}`;
-     ht+='<ul>';
-     for(const show of sorted[genre]) {
-       ht+=`<li>${show.title} (S${show.ssn} | ${show.lang} | ${show.src})`;
-       ht+='<ul>';
-      for(const ep of show.episodes){
-      if(!show.isArchive){ ht+=`<li><a href="${showBase+show.path + ep.file+show.format}">Episode ${ep.num}</a></li>`;}
-      else{ht+=`<li><a href="${archiveBase+show.path+ep.file}">Archive ${ep.num}</a></li>`;}
-      }
-    ht+='</ul></li>';
+   #btn-stop-download{
+     margin-right:8px;
+    background: #c00;
+    color: white;
+    border:none;
+    padding: 2px 8px;
+    border-radius:4px;
+    font-size:11px;
+    display: none;
+    z-index:3
+   }
+   #btn-stop-download.show{
+    display: block !important ;
+   }
+   #btn-stop-download:active{
+    transform:scale(0.95);
+   }
+    .player-wrapper{display:none;font-size:15px;flex-direction:column;align-items:center;gap:2px;position:relative;transition:opacity 0.5s ease,transform 0.5s cubic-bezier(0.68,-0.55,0.27,1.55);opacity:0;transform:translateX(100%)}
+    .player-wrapper.is-visible{opacity:1;transform:translateX(0);display:flex}
+    
+    .track-marquee{width:100%;overflow:hidden;position:relative;height:18px;border-radius:4px}
+    .marquee-content{position:absolute;white-space:nowrap;padding-left:100%;animation:marqueeScroll 18s linear infinite}
+    @keyframes marqueeScroll{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+    .playlist-item .marquee-content{animation:none;padding-left:0}
+    .playlist-item.playing .marquee-content{padding-left:100%;animation:marqueeScroll 18s linear infinite}
+    
+    .col,.col ul{list-style-type:none;padding-left:10px}
+    .col li{padding:5px}
+    .toggle{padding:12px;cursor:pointer}
+    .toggle::before{display:inline-block;width:17px;content:'➕ '}
+    .toggle.show::before{content:'➖ '}
+    .col ul{display:none}
+    .toggle.show+ul{display:block}
+    
+.sidebar{border-radius: 3px; position:fixed;left:-300px;top:0;height:100%;width:300px;background:var(--surface);transition:left 0.5s ease;z-index:100000100;display:flex;flex-direction:column;padding:3px}
+   // .sidebar.open{left:0}
+    #sidebar-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+    .sidebar-tab{flex:1;display:none;overflow:auto}
+    .sidebar-tab.active{display:block}
+    #sidebar-treeview{flex:1;padding:3px;margin:5px;max-height:100vh;overflow-y:auto;overflow-x:auto}
+    #sidebar-tabs{display:flex;justify-content:space-around;padding:4px;background:var(--bg);border-top:1px solid #444}
+    .tab-btn{flex:1;padding:8px 0;background:transparent;border:none;cursor:pointer;font-size:14px;color:var(--border1)}
+    .tab-btn.active{color:var(--text);border:1px solid var(--accent);background:rgba(0,0,0,0.8);box-shadow:0 0 10px 2px rgba(74,158,255,0.4)}
+    
+.sidebar.open {
+  left: 0;
+  border-right: 1px solid var(--border1);
+    border-top:1px solid var(--border1);
+    border-bottom: 1px solid var(--border1);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6);
+}
+    .sticky-header{position:sticky;top:0;z-index:100000099;background:var(--surface);padding:8px;border-bottom:1px solid #444}
+    .sticky-header>div{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .sticky-header button,.sticky-header input{padding:6px 12px;background:#444;color:#fff;border:1px solid var(--border1);border-radius:4px}
+    .sticky-header button:active{transform:scale(0.95)}
+    #iu{flex:1;min-width:200px;background:var(--bg);color:var(--text);font-family:monospace;font-size:12px}
+    #icon{font-size:1.75em;background:transparent;cursor:pointer;display:none}
+   
+    #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100000999;align-items:center;justify-content:center;pointer-events:none}
+    #overlay > span{pointer-events:auto;background:#222;color:var(--text);padding:2em;border-radius:8px;border:1px solid #665;text-align:center}
+    #pl{position:relative;width:100%;height:0vh;overflow:hidden;background:#000;transition:height 0.5s ease}
+    #pl.active{height:100vh}
+    
+    .md-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);padding:8px;font-size:28px;z-index:11;opacity:0;transition:opacity 0.6s ease}
+    .md-nav.show{opacity:1}
+    #prev-media{left:10px}
+    #next-media{right:10px}
+    
+    .media-content{position:absolute;inset:0;display:none;justify-content:center;align-items:center;border:1px solid black;z-index:1}
+    .media-content.active{display:flex;z-index:2;animation:fadeIn 0.8s ease}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .media-close-btn{position:absolute;top:10px;right:10px;z-index:100;background:rgba(255,0,0,0.7);color:white;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;opacity:0;transition:opacity 0.6s ease;z-index:1}
+   .media-close-btn.show{opacity:1}
+    
+    .seek-slider-container{position:fixed;bottom:0;left:0;right:0;height:0;background:var(--bg);border-top:2px solid var(--accent);opacity:0;transform:translateY(100%);transition:all 0.2s ease;z-index:100001000;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .seek-slider-container.active{height:140px;opacity:1;transform:translateY(0);pointer-events:all;padding:12px}
+    .slider-track{width:90%;height:8px;background:#444;border-radius:4px;position:relative;cursor:pointer;box-shadow:0 0 6px 2px rgba(74,158,255,0.7)}
+    .slider-fill{height:100%;background:var(--accent);border-radius:4px;width:0%}
+    .slider-handle{position:absolute;top:50%;transform:translate(-50%,-50%);width:32px;height:32px;background:var(--accent);border-radius:50%;box-shadow:0 2px 8px rgba(74,158,255,0.6);cursor:grab}
+    
+    #ct{width:100vw;height:calc(100vh - 85px);overflow:auto;background:var(--bg)}
+    #ct a{color:var(--accent);text-decoration:none}
+    #ct a:hover{text-decoration:underline}
+    #ct pre{background:#111;padding:12px;border-left:3px solid var(--accent);overflow:auto}
+    #ct img,#ct video{max-width:100%;height:auto;margin:8px 0;border-radius:4px}
+    
+    .proxy-media-link{display:block;padding:8px;background:var(--surface);border:1px solid #444;margin:4px 0;border-radius:4px;color:var(--accent);cursor:pointer}
+    .proxy-media-link:hover{background:#333}
+
+     /*Tab Bar & Tabs*/
+    #tab-bar{display:flex;gap:2px;align-items:center;width:100%;padding:2px 2px;background:transparent;overflow-x:auto}
+
+    .tab{flex:0 1 125px;min-width:50px;padding: 3px 6px;background:#333;color:#aaa;border-radius:4px;display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:12px;white-space:nowrap;overflow:hidden;border:1px solid transparent;transition:0.5s}
+
+     .tab.active{background:#2a4a6a;color:#fff;border-color:var(--accent);box-shadow:0 0 8px rgba(74,158,255,0.3)}
+
+    .tab-title{overflow:hidden;text-overflow:ellipsis;flex:1;font-size:1.22em}   
+
+    .tab-close{width:18px;height:18px;border-radius:50%;background: #c00;color:#fff;border:none;font-size:1.22em;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+    #btnAddTab{min-width:28px;height:28px;border-radius:4px;background:transparent;color:#fff;border:none;font-size:19px;line-height:1;flex-shrink:0;margin-left:auto}
+
+    /*Image placeholder styling*/
+   .img-placeholder{background:var(--surface);border:1px dashed #555;display:inline-block;min-width:50px;min-height:50px;margin:8px 0}
+
+    /* pdf Nav */
+     #pdf-nav{position:absolute;bottom:20px;right:20px;top:auto;left:auto;transform:none;background: rgba(0,0,0,0.85);padding:12px;border-radius:8px;z-index:20;opacity:0;transition:opacity 0.3s;display:flex;gap:8px;pointer-events:none;border:1px solid var(--accent);box-shadow:0 4px 20px rgba(0,0,0,0.5)}
+
+    /*med ind */
+     #media-index{position: absolute; bottom: 20px; left: 50%;transform: translateX(-50%);z-index:20;transition: opacity 0.3s;opacity:0}
+
+    /* Chat Styles */
+    .chat-container{position:fixed;top:8px;right:8px;width:650px;height:362px;background:var(--bg);border:1px solid var(--accent);border-radius:12px;box-shadow:0 4px 20px rgba(74,148,255,0.3);display:none;flex-direction:column;z-index:100000987;opacity:0;transform:translateY(20px);transition:all 0.3s ease;overflow:hidden}
+    .chat-container.active{display:flex;opacity:1;transform:translateY(0)}
+    .chat-header{background:var(--surface);padding:12px 16px;border-bottom:1px solid var(--accent);display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+    .chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#0a0a0a}
+    .chat-message{max-width:85%;padding:8px 12px;border-radius:8px;word-wrap:break-word}
+    .chat-message.user{align-self:flex-end;background:var(--accent);color:#000}
+    .chat-message.ai{align-self:flex-start;background:var(--surface);border:1px solid var(--text);color:var(--text)}
+    .chat-input-container{background:var(--surface);padding:12px;border-top:1px solid var(--accent);display:flex;gap:8px}
+    .chat-input{flex:1;background:var(--bg);border:1px solid #444;color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px}
+    .chat-send{background:var(--accent);border:none;color:#000;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold}
+    .chat-model-select{background:var(--bg);border:1px solid var(--text);color:#eee;padding:6px 10px;border-radius:6px;font-size:12px}
+    .chat-loading{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  `;
+  
+  const style = doc.createElement('style');
+  style.textContent = css;
+  doc.head.appendChild(style);
+
+  doc.body.innerHTML = `
+  <div id="overlay">
+ </div>
+  <div id="pl">
+    <button class="md-nav" id="prev-media">↩</button>
+    <button class="md-nav" id="next-media">↪</button>
+      <div id="media-index" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#eee;padding:4px 8px;border-radius:4px;font-size:14px;pointer-events:none;z-index:20">
+<span id="media-index-num">0</span> of <span id="media-index-total">0</span>
+   </div>
+
+  <div id="pdf-nav">
+  <button id="pdf-dark-toggle" style="padding:4px 8px;background:var(--accent);border:none;border-radius:4px;color:#000;font-size:12px">🌚</button>
+  <button id="pdf-bookmark-del" style="padding:4px 8px;background:#c00;border:none;border-radius:4px;color:#fff;font-size:12px" title="Delete bookmark">🗑</button>
+  <input type="number" min=1 id="pdf-page-inp" placeholder="#" style="width:50px;padding:4px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--text);text-align:center">
+  of
+  <span id="pdf-num-pages" style="padding:4px 12px;background:var(--bg);color:var(--text);border:none">@</span>
+</div>
+  <!--   <div id="pdf-nav">
+     <button id="pdf-dark-toggle" style="padding:4px 8px;background:var(--accent);border:none;border-radius:4px;color:#000;font-size:12px">🌚</button>
+        <input type="number" min=1 id="pdf-page-inp" placeholder="#" style="width:50px;padding:4px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--text);text-align:center"> of <span id="pdf-num-pages" style="padding:4px 12px;background:var(--bg)color:var(--text);border:none">@</span>
+    </div>-->
+  </div>
+  <div class="sticky-header">
+    <div>
+      <button id="btnOpn">🌫</button>
+      <button id="bck">🔙 BCK</button>
+      <button id="rf">🔄 RF</button>
+      <input id="iu" placeholder="https://..." />
+      <span id="icon">🎶</span>
+      <div id="sv">
+        <div class="sv-top"></div>
+        <div class="sv-bottom"></div>
+      </div>
+      <label class="custom-cb">
+        <input id="cb" type="checkbox"/>
+        <span class="checkmark"></span>
+        <span>Auto</span>
+      </label>
+      <input id="bs" type="button" value="↓" />
+      <button id="hide">💡</button>
+      <button id="btnChat">🤖</button>
+    </div>
+    <div id="msgs" class="msg-container">
+      <span id="pg" style="font-family:monospace;font-size:12px;color:var(--accent);z-index:2">Be patient.</span>
+     <span id="pg2" style="display:none"></span>
+      <div id="aud-wrapper" class="player-wrapper">
+        <div id="trackTimeDetail" style="font-size:12px">0:00:00</div>
+        <div class="aud-controls" style="display:flex;gap:10px">
+          <button id="btn-prev">⏮</button>
+          <button id="btn-play">▶</button>
+          <button id="btn-next">⏭</button>
+          <button id="btn-close-player">✖</button>
+        </div>
+        <div class="track-marquee"><div id="marqueeContent" class="marquee-content">...</div></div>
+      </div>
+    </div>
+    <div id="tab-bar" style="display:none"></div>
+    <div id="pb"style="position:relative;bottom:-8;left:0;height:6px;background:linear-gradient(to right,black 0%,#1a1a1a 16%,#c00 32%,gold 73%,green 100%);width:0%;transition: width 0.3s ease;z-index:1"></div>
+  </div>
+ <!-- <textarea id='tmp'rows=8 style='width:100%'></textarea>
+  <button onclick="tmp.value=''">¶¶</button> | <button onclick="localStorage.setItem(iu.value,tmp.value);U('svd')">🐸</button>-->
+  <div id="ct"></div>
+  <div id="seekSliderContainer" class="seek-slider-container">
+    <div style="width:90%;display:flex;align-items:center;gap:12px">
+      <button id="scrubBack" style="font-size:20px;background:var(--accent);border:none;border-radius:50%;width:40px;height:40px;color:#000;flex-shrink:0">◀</button>
+   <div style="flex:1">
+      <div style="color:#eee;font-size:13px;text-align:center;margin-bottom:8px">Slide to seek</div>
+      <div class="slider-track" id="sliderTrack">
+        <div class="slider-fill" id="sliderFill"></div>
+        <div class="slider-handle" id="sliderHandle"></div>
+      </div>
+      <div style="color:#4a9eff;font-size:14px;font-weight:bold;text-align:center;margin-top:6px"><span id="sliderTime">0:00</span> / <span id="sliderDuration">0:00</span></div>
+    </div>
+  <button id="scrubForward" style="font-size:20px;background:var(--accent);border:none;border-radius:50%;width:40px;height:40px;color:#000;flex-shrink:0">▶</button>
+ </div>
+  </div>
+   <div id="toastContainer"></div>
+  <div id="sidebar" class="sidebar">
+  <!--  <button id="btnCls" style="position:absolute;top:8px;right:8px;padding:10px;background:#444;color:#fff;border:1px solid #665;border-radius:4px;cursor:pointer;display:none">✖</button>-->
+    <div style="padding:10px;border-bottom:1px solid #444">🍿 Clandestine Entertainment 🎵</div>
+    <div id="sidebar-content">
+      <div id="tab-shows" class="sidebar-tab active">
+        <div id="sidebar-treeview">LOADING...</div>
+      </div>
+      <div id="tab-music" class="sidebar-tab">
+        <div id="sidebar-playlist" style="padding:10px;color:#ccc">No music added</div>
+      </div>
+    <div id="tab-options" class="sidebar-tab">
+      <div id="sidebar-options" style="padding:10px;color:#ccc"></div>
+    </div>
+    </div>
+    <div id="sidebar-tabs">
+      <button id="tab-btn-shows" class="tab-btn active">Shows</button>
+      <button id="tab-btn-music" class="tab-btn">Music</button>
+       <button id="tab-btn-options" class="tab-btn">Opts</button>
+    </div>
+  </div>
+  `;
+  
+  const ct = doc.getElementById('ct');
+  const sd = ct.attachShadow({mode:'open'});
+  sd.innerHTML = '<style>{box-sizing:border-box} img,video,audio{max-width:100%}</style>';
+})();
+
+//## Section 2: State, Utilities & URL Polyfill 
+
+(function initUtils() {
+  window.AppState = {
+   version: 9.0,
+   wsEpoch: 0,
+    
+options: (() => {
+  const defaults = {
+    mseThresholdMB: 45,
+    maxBufferAhead: 200,
+    bufferTarget: 90,
+    cleanupBehind: 12,
+    useSmartDefaults: false,
+    maxBufferMemoryMB: 200,
+    bufferMemoryTargetMB: 60,
+    nbSamples: 35,
+    useToast: false,
+    useMediaChunking: false,
+    mediaChunkSize: 1024 * 1024
+  };
+  const stored = JSON.parse(localStorage.getItem('options') || 'null');
+  return stored ? { ...defaults, ...stored } : defaults;
+})(),
+   wsPool: {text:[],media:[]},
+   wsPoolMax: {text:1,media: 4},
+   ws: null, wsMedia: null,requests: new Map(),  serverIndex: 0, mediaServerIndex: 4,
+    isConnected: false, isMediaConnected: false, dimmed: false, isAnimating: false,pdfDownloading: false,
+    videoDownloading: false, audioDownloading: false,
+    playlist: [], mediaKeys: [], currentMediaIndex: -1,
+    domCache: new Map(), firstLoad: true,
+    mp4box: null, mp4boxLoaded: false,
+    sliderActive: false, sliderDragging: false,
+    sliderInitialized: false,
+    currentFadeEl: null, isFading: false,
+    clickTimers: {}, longPressTimer: null,
+    downloadingImages: false, imageAttempts: 0,
+    linkText: '',
+    currentURL: '',
+    baseURL:'',
+    timeoutMS:8000,
+    requestTimeouts: new Map(),
+    mediaTimeout: null,
+    tabs:[],
+    activeTabId:null,
+    nextTabId:1,
+    prevTabId:-1,
+    bufferedAhead:0,
+   
+   };
+ let numberedServers =  ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48','49','51','52','53','54'];
+
+let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','chatt','dark','harley','kazak','light','mitre','omega','offal','osric','phone','skip','sv1','text','trace','truth','turbo','uwtb','wit','bn','br'];
+
+ const servers=numberedServers.concat(namedServers);
+  window.servers = servers;
+  window.currentUrl = null;
+
+  // URL.parse polyfill for PDF.js
+  const OriginalURL = window.URL;
+  window.URL = class extends OriginalURL {
+    constructor(url, base) {
+      let final = url;
+      if (typeof url === 'string' && url.startsWith('blob:')) final = url;
+      super(final, base);
     }
-   ht+='</ul></li>';
+    static parse(url, base) {
+      try { return new URL(url, base); } catch { return null; }
+    }
+  };
+
+  window.$ = (sel, el = document) => el.querySelector(sel);
+  window.$$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+  window.el = tag => document.createElement(tag);
+  window.DL = ms => new Promise(r => setTimeout(r, ms));
+
+  window.checkBuffer = async function (r, aggressive = false) {
+  if (!r || r.fatalError || r.isRecovering) return;
+
+  const S = window.AppState;
+  const now = Date.now();
+
+  // watchdog: unlock a stuck checkBuffer
+  if (r.checkingBuffer && r._checkBufferStartedAt && (now - r._checkBufferStartedAt > 20000)) {
+    r.checkingBuffer = false;
+  }
+  if (r.checkingBuffer) return;
+
+  if (!r.usesMSE || !r.ms || r.ms.readyState !== 'open' || !r.videoEl) return;
+
+  try {
+    r.checkingBuffer = true;
+    r._checkBufferStartedAt = now;
+
+    const vid = r.videoEl;
+    const ct = vid.currentTime || 0;
+    const buf = vid.buffered;
+
+    let buffAhead = 0;
+    for (let i = 0; i < buf.length; i++) {
+      if (ct >= buf.start(i) && ct <= buf.end(i)) {
+        buffAhead = buf.end(i) - ct;
+        break;
+      }
+    }
+    r.bufferedAhead = buffAhead;
+    S.bufferedAhead = buffAhead;
+
+    const BUFFER_AHEAD_TARGET = (S.options.useSmartDefaults && r.smartBuffer)
+      ? r.smartBuffer.bufferTarget
+      : (S.options.bufferTarget || 90);
+    const BUFFER_AHEAD_MAX = (S.options.useSmartDefaults && r.smartBuffer)
+      ? r.smartBuffer.maxAheadTime
+      : (S.options.maxBufferAhead || 180);
+    const BUFFER_BEHIND_CLEAN = (S.options.useSmartDefaults && r.smartBuffer)
+      ? r.smartBuffer.cleanupBehind
+      : (S.options.cleanupBehind || 12);
+
+    const needMore = r.isOpen && !r.fatalError && r.bytesReceived < r.totalBytes;
+    const wsAlive = S.wsMedia && S.wsMedia.readyState === WebSocket.OPEN && S.isMediaConnected && !S.medRotating;
+
+    // 1. Pause because the buffer is full (but only if the user isn't forcing a stop)
+    if (!r.dlPaused && !r.userPaused && needMore && buffAhead >= BUFFER_AHEAD_MAX) {
+      r.dlPaused = true;
+      r._chunkPending = false;
+      r._chunkDone = false;
+      U(`Download paused – buffer ahead ≥ ${BUFFER_AHEAD_MAX}s`);
+      closeMediaWS();
+       S.domCache.forEach(div=>{
+        if(div.requestId=r.id){
+          setTimeout(()=>div.infoBox.classList.remove('show','exanded'),1250);
+        }
+       });
+      return;
+    }
+
+    // 2. Resume if we fell below target and we aren't user-paused
+    if (r.dlPaused && !r.userPaused && needMore && buffAhead < BUFFER_AHEAD_TARGET) {
+      r.dlPaused = false;
+      r._chunkPending = false;
+      r._chunkDone = false;
+      S.domCache.forEach(div => { if (div.requestId === r.id) div.infoBox.classList.add('show'); });
+      U(`Resuming download – buffer ahead < ${BUFFER_AHEAD_TARGET}s`);
+
+      if (wsAlive) sendChunkRequest(r);
+      else {
+        r.isRecovering = true;
+        try {
+          await rotateServer({
+            url: r.url, id: r.id,
+            bytesReceived: r.expectedOffset ?? r.bytesReceived,
+            method: r.method, socketType: 'media'
+          }, 'media');
+        } finally {
+          r.isRecovering = false;
+        }
+      }
+      return;
+    }
+
+    // 3. Stalled detection (both chunked and non-chunked)
+    //    Works whether wsAlive is true or false: if no data/request activity, rotate.
+    const lastLife = Math.max(
+      r.lastDataAt || 0,
+      r.lastChunkAt || 0,
+      r.lastActivity || 0
+    );
+    const idle = now - lastLife;
+
+    if (needMore && !r.dlPaused && idle > 6000) {
+      r.staleRotations = (r.staleRotations || 0) + 1;
+
+      if (r.staleRotations > 10) {
+        U('Server keeps dropping – pausing stream.', 'toast');
+        r.dlPaused = true;
+        r.userPaused = true;
+        r.isRecovering = false;
+        closeMediaWS();
+        showResumeOptions(r);
+        return;
+      }
+
+      U(`Stall detected (${Math.round(idle / 1000)}s). Rotating #${r.staleRotations}…`, 'toast');
+
+      r.isRecovering = true;
+      try {
+        await rotateServer({
+          url: r.url, id: r.id,
+          bytesReceived: r.expectedOffset ?? r.bytesReceived,
+          method: r.method, socketType: 'media'
+        }, 'media');
+      } finally {
+        r.isRecovering = false;
+        // do NOT reset lastDataAt here. Only set lastChunkAt so we give the new
+        // connection a moment to actually send the restart request.
+        r.lastChunkAt = Date.now();
+        r._chunkPending = false;
+        r._chunkDone = false;
+      }
+      return;
+    }
+
+    // 4. If the socket is dead and we still need data, reconnect
+    if (!wsAlive && needMore && !r.dlPaused && !r.isRecovering) {
+      U('Media socket missing – reconnecting', 'toast');
+      r.isRecovering = true;
+      try {
+        await rotateServer({
+          url: r.url, id: r.id,
+          bytesReceived: r.expectedOffset ?? r.bytesReceived,
+          method: r.method, socketType: 'media'
+        }, 'media');
+      } finally {
+        r.isRecovering = false;
+      }
+      return;
+    }
+
+    // 5. In chunk mode, fire the next chunk if nothing is in flight
+    if (wsAlive && needMore && !r.dlPaused && r.useChunking && !r._chunkPending) {
+//      sendChunkRequest(r);
+    }
+
+    // 6. Cleanup behind playhead
+    const removeUpTo = ct - BUFFER_BEHIND_CLEAN;
+    if (removeUpTo > 0) {
+      for (const sb of r.ms.sourceBuffers) {
+        if (!sb.updating && sb.buffered.length > 0) {
+          const start = sb.buffered.start(0);
+          if (start < removeUpTo) {
+            try { sb.remove(0, removeUpTo); } catch (e) { U(`SB Remove Error: ${e}`); }
+          }
+        }
+      }
+    }
+
+    // 7. End-of-stream
+    if (r.bytesReceived >= r.totalBytes && r.eosSent && r.ms.readyState === 'open') {
+      try { r.ms.endOfStream(); } catch (_) {}
+    }
+  } finally {
+    r.checkingBuffer = false;
+    r._checkBufferStartedAt = null;
+    S.domCache.forEach(div => {
+      if (div.requestId === r.id) updateMSEInfoBox(div);
+    });
+  }
+};
+ /*  window.checkBuffer = async function (r, aggressive = false) {
+  if (r.fatalError) return;
+
+  const S = window.AppState;
+  const now = Date.now();
+
+  if (r.checkingBuffer && r._checkBufferStartedAt && (now - r._checkBufferStartedAt > 20000)) {
+    r.checkingBuffer = false;
+  }
+  if (r.checkingBuffer || r.isRecovering) return;
+
+  try {
+    r.checkingBuffer = true;
+    r._checkBufferStartedAt = now;
+
+    if (!r.ms || r.ms.readyState !== 'open' || !r.usesMSE || !r.videoEl) return;
+
+    const vid = r.videoEl;
+    const ct = vid.currentTime || 0;
+    let buffAhead = 0;
+    const buf = vid.buffered;
+    for (let i = 0; i < buf.length; i++) {
+      if (ct >= buf.start(i) && ct <= buf.end(i)) {
+        buffAhead = buf.end(i) - ct;
+        break;
+      }
+    }
+    r.bufferedAhead = buffAhead;
+    S.bufferedAhead = buffAhead;
+
+    let BUFFER_AHEAD_TARGET, BUFFER_AHEAD_MAX, BUFFER_BEHIND_CLEAN;
+    if (S.options.useSmartDefaults && r.smartBuffer) {
+      BUFFER_AHEAD_TARGET = r.smartBuffer.bufferTarget;
+      BUFFER_AHEAD_MAX = r.smartBuffer.maxAheadTime;
+      BUFFER_BEHIND_CLEAN = r.smartBuffer.cleanupBehind;
+    } else {
+      BUFFER_AHEAD_TARGET = S.options.bufferTarget || 90;
+      BUFFER_AHEAD_MAX = S.options.maxBufferAhead || 180;
+      BUFFER_BEHIND_CLEAN = S.options.cleanupBehind || 12;
+    }
+
+    const wsAlive = S.wsMedia && S.wsMedia.readyState === WebSocket.OPEN && S.isMediaConnected && !S.medRotating;
+
+    const stillNeedData =
+      r.isOpen && !r.dlPaused && !r.fatalError && r.bytesReceived < r.totalBytes;
+    const expectingData = stillNeedData && wsAlive && buffAhead < BUFFER_AHEAD_TARGET;
+ //  r.expectingData=expectingData;
+    const dataIdle = now - (r.lastDataAt || r.lastActivity || now);
+    const chunkIdle = now - (r.lastChunkAt || now);
+    const chunkStuck = r.useChunking && r._chunkPending && chunkIdle > 8000;
+
+    if (expectingData && (dataIdle > 6000 || chunkStuck)) {
+      r.staleRotations = (r.staleRotations || 0) + 1;
+
+      if (r.staleRotations > 8) {
+        U('Server keeps dropping — pausing stream.', 'toast');
+        r.dlPaused = true;
+        r.isRecovering = false;
+        closeMediaWS();
+        showResumeOptions(r);
+        return;
+      }
+
+      U(`Stall detected (${Math.round(Math.max(dataIdle, chunkIdle) / 1000)}s). Rotating (#${r.staleRotations})…`, 'toast');
+      r._chunkPending = false;
+      r._chunkDone = false;
+      r.lastActivity = now;
+      r.lastDataAt = now;
+      r.lastChunkAt = now;
+      r.isRecovering = true;
+      try {
+        await rotateServer({
+          url: r.url,
+          id: r.id,
+          bytesReceived: r.expectedOffset ?? r.bytesReceived,
+          method: r.method,
+          socketType: 'media'
+        }, 'media');
+      } finally {
+        r.isRecovering = false;
+      }
+      return;
+    }
+
+    if (r.staleRotations && dataIdle < 4000) r.staleRotations = 0;
+
+    if (vid.seeking) return;
+
+    const bufferFull = buffAhead >= BUFFER_AHEAD_MAX;
+    const sessionLimitReached = r.sessionDL && r.sessionDL > 200 * 1024 * 1024;
+
+    if (!bufferFull && r.dlPaused && buffAhead <= BUFFER_AHEAD_TARGET + 12) {
+      prewarmPool('media').catch(() => {});
+    }
+
+    if (bufferFull || sessionLimitReached) {
+      if (!r.dlPaused) {
+        r.dlPaused = true;
+        r._chunkPending = false;
+        r.sessionDL = 0;
+       if(S.mseCheckInterval){clearInterval(S.mseCheckInterval);S.mseCheckInterval=null}
+        U(bufferFull
+          ? `Download paused – buffer ahead ≥ ${BUFFER_AHEAD_MAX}s`
+          : 'Download paused — session limit');
+        closeMediaWS();
+        S.domCache.forEach(div => {
+          if (div.requestId === r.id) {
+            setTimeout(() => div.infoBox.classList.remove('show', 'expanded'), 3000);
+          }
+        });
+      }
+      return;   // don't also try to resume on the same tick
+    }
+
+    if (r.dlPaused && !r.userPaused && buffAhead < BUFFER_AHEAD_TARGET) {
+      r.dlPaused = false;
+      r._chunkPending = false;
+      r._chunkDone = false;
+      S.domCache.forEach(div => {
+        if (div.requestId === r.id) div.infoBox.classList.add('show');
+      });
+      U(`Resuming download – buffer ahead < ${BUFFER_AHEAD_TARGET}s`);
+
+      if (wsAlive) {
+        sendChunkRequest(r);
+      } else {
+        r.isRecovering = true;
+        try {
+          await rotateServer({
+            url: r.url,
+            id: r.id,
+            bytesReceived: r.expectedOffset ?? r.bytesReceived,
+            method: r.method,
+            socketType: 'media'
+          }, 'media');
+        } finally {
+          r.isRecovering = false;
+        }
+      }
+      return;
+    }
+
+    if (!wsAlive && r.isOpen && !r.dlPaused && !r.fatalError && !r.isRecovering && r.bytesReceived < r.totalBytes) {
+      U('Media socket missing — reconnecting', 'toast');
+      r.isRecovering = true;
+      try {
+        await rotateServer({
+          url: r.url,
+          id: r.id,
+          bytesReceived: r.expectedOffset ?? r.bytesReceived,
+          method: r.method,
+          socketType: 'media'
+        }, 'media');
+      } finally {
+        r.isRecovering = false;
+      }
+      return;
+    }
+
+    const removeUpTo = ct - BUFFER_BEHIND_CLEAN;
+    if (removeUpTo > 0) {
+      for (const sb of r.ms.sourceBuffers) {
+        if (!sb.updating && sb.buffered.length > 0) {
+          const start = sb.buffered.start(0);
+          if (start < removeUpTo) {
+            try { sb.remove(0, removeUpTo); } catch (e) { U(`SB Remove Error: ${e}`); }
+          }
+        }
+      }
+    }
+
+    if (r.bytesReceived >= r.totalBytes && r.eosSent && r.ms.readyState === 'open') {
+      try { r.ms.endOfStream(); } catch (_) {}
+    }
+  } finally {
+    r.checkingBuffer = false;
+    r._checkBufferStartedAt = null;
+    try {
+      S.domCache.forEach(div => {
+        if (div.requestId === r.id) updateMSEInfoBox(div);
+      });
+    } catch (_) {}
+  }
+};*/
+ 
+  window.clearRequestTimeouts= () =>{
+   const tab = AppState.tabs.find(t=>t.id===AppState.activeTabId);
+  if(!tab)return;
+   tab.requestTimeouts.forEach((val,key,map)=>{clearTimeout(val),map.delete(key)})
+  };
+
+  window.revokeAllRequests=()=>AppState.requests.forEach((val,key,map)=>{
+  val.hold=false;val.isOpen=false;revokeRequest(key)
+  });
+
+  window.closeAllTabs=()=>AppState.tabs.forEach(tab=>Tabs.close(tab.id));
+
+  window.waitWhile=async(func,criteria,limiter=75)=>{
+      let count=0;
+    if(func)func();
+     while(criteria && criteria() && count <  limiter){
+       await DL(100);
+       count++
+     }
+   return count < limiter;
+  };
+   
+  window.fmtTime = s => {
+    if (!isFinite(s)) return '0:00';
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
+    const mm = m.toString().padStart(2,'0'), ss = sec.toString().padStart(2,'0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+  };
+  
+  window.truncate = (str, len=100) => {
+    if (str.length <= len) return str;
+    const half = Math.floor((len-3)/2);
+    return str.slice(0,half)+'...'+str.slice(-half);
+  };
+  
+  window.escapeHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  window.randomId = () => Math.random().toString(36).substr(2,9);
+
+  window.getAuth = () => btoa(`${new Date().getUTCFullYear()}${new Date().getUTCMonth()}${new Date().getUTCDate()}`);
+
+  window.getFileName = url => {
+    const p = decodeURIComponent(url.pathname.split('/').pop());
+    const idx = p.lastIndexOf('.');
+    return idx === -1 ? p : p.substr(0,idx);
+  };
+  
+  // Transform URL with special prefixes and cleaning
+  window.transformURL = i => {
+    if (i.includes('p:')) {
+      if(i.includes('learning.paytel.com')){
+       if(i.includes('my/learner_')) return i.split('my/learner_')[0].replace('https://learning.paytel.com','');
+       return i.replace('https://learning.paytel.com','');
+     }
+      return i;
+    }
+    if (i.includes('traffic.megaphone.fm'))return `https://traffic.megaphone.fm${i.split('traffic.megaphone.fm')[1]}`;
+    if (i.startsWith('?')) return `https://search.yahoo.com/search?q=${i.slice(1)}`;
+    if (i.startsWith('!')) return `https://search.yahoo.com/search?q=archive.org ${i.slice(1)}`;
+   if(i.includes('tnaflix') && i.includes('.mp4') && i.includes('?'))return `https://${i}&br=10000`;
+    if (i.includes('anysex.com') && i.includes('/?br=')) return 'https://'+i.split('?br=')[0]+'?br=10000';
+    if (i.includes('xcafe.com') && i.includes('/?download=')) return 'https://'+i.split('?download=')[0]+'?br=10000';
+    if(i.includes('learning.paytel.com')){
+      if (i.includes('my/learner_')) return i.split('my/learner_')[0].replace('https://learning.paytel.com','');
+      return i.replace('https://learning.paytel.com','');
+    }
+    if (i.includes('RU=https://')) {
+      let val=i.split('RU=https://')[1].split('/RK=')[0];
+      return 'https://' + val;
+    }
+    return i.startsWith('http') ? i : `https://${i}`;
+  };
+
+  // Resolve relative URLs against base
+  window.resolveURL = (href) => {
+    const S=window.AppState;
+    try {
+      const activeTab = S.tabs.find(t=>t.id===S.activeTabId);
+      const base = activeTab?.url || S.currentProxiedURL || S.baseURL || 'https://archive.org';
+      const cleaned = transformURL(decodeURIComponent(href));
+      const resolved = new URL(cleaned, base);
+      return resolved;
+    } catch {
+      return null;
+    }
+  };
+
+  window.fade = async (elem,delay=1750) => {
+    const S = window.AppState;
+  if(S.isFading && S.currentFadeEl===elem)return;
+   S.isFading=true;
+    if(S.fadeRaf){
+     cancelAnimationFrame(S.fadeRaf);
+     S.fadeRaf=null;
+    }
+
+    S.currentFadeEl = elem;
+    let op = 1;
+
+    elem.style.opacity = 1;
+    elem.style.display='block';
+
+    const fadeStep = () => {
+      op -= 0.02;
+      if (op <= 0) {
+        elem.style.opacity = 1;
+        elem.style.display = elem.id === 'pg' ? 'block' : 'none';
+        if (elem.id === 'pg' || elem.id==='pg2') {
+          S.requests.forEach((r,k) => { if (!r.hold && !r.isOpen) window.revokeRequest(k); });
+          elem.textContent='';
+        }
+        S.isFading = false;
+        S.currentFadeEl=null;
+        S.fadeRaf=null;
+        return;
+      }
+      elem.style.opacity = op;
+      S.fadeRaf = requestAnimationFrame(fadeStep);
+    };
+    if(delay>0){
+      await DL(delay);    
+      if(!S.isFading)return;
+     }
+   S.fadeRaf = requestAnimationFrame(fadeStep)
+  };
+
+  window.updateDLProgress=txt=>{
+   const pg2=$('#pg2');
+   pg2.textContent=txt;
+   pg2.style.opacity=1;
+   pg2.style.display='block';
+  };
+
+window.U = (txt, preferMode = null) => {
+  const S = window.AppState;
+  const mode = preferMode || (S.options.useToast ? 'toast' : 'span');
+
+  if (mode === 'toast') {
+    showToast(txt);
+    return;
+  }
+
+  const pg = $('#pg');
+
+  if (S.fadeRaf) {
+    cancelAnimationFrame(S.fadeRaf);
+    S.fadeRaf = null;
+  }
+  S.isFading = false;
+
+  pg.textContent = txt;
+  pg.style.opacity = 1;
+  pg.style.display = 'block';
+};
+
+window.showToast = (txt) => {
+  const c = $('#toastContainer');
+  if (!c) return;
+  const t = el('div');
+  t.className = 'toast';
+  t.textContent = txt;
+  c.appendChild(t);
+
+  // cap visible toasts
+  const all = $$('.toast', c);
+  while (all.length > 4) all.shift().remove();
+
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => {
+    t.classList.remove('show');
+    t.addEventListener('transitionend', () => t.remove(), { once: true });
+  }, 3000);
+};
+
+  window.Tabs= {
+    create(url=null, title='New Tab', activate=true){
+      const S=window.AppState;
+      const id=S.nextTabId++;
+      
+      const tab={
+        id,
+        url:url || '',
+        title,
+        fragment: document.createDocumentFragment(),
+        scrollPos:0,
+        history:[],
+        requestTimeouts: new Map(),
+        autoChecked: false
+      };
+     S.tabs.push(tab);
+     if(activate)this.switch(id);
+     else this.render();
+     $('#tab-bar').style.display='flex';
+     return id;
+    },
+
+   switch(id){
+    const S=window.AppState;
+    if(S.activeTabId===id)return;
+   
+    //save current state
+    const cur=S.tabs.find(t=>t.id===S.activeTabId);
+    if(cur){
+      if(S.prevTabId !== cur.id)S.prevTabId=cur.id;
+      cur.scrollPos=$('#ct').scrollTop;
+      cur.url= $('#iu').value;
+      const sr=$('#ct').shadowRoot;
+      cur.autoChecked=$('#cb').checked;
+      while(sr.firstChild)cur.fragment.appendChild(sr.firstChild);
+    }
+
+    //restore tab
+    S.activeTabId=id;
+    const next=S.tabs.find(t=>t.id===id);
+    const sr=$('#ct').shadowRoot;
+    sr.innerHTML='<style>{box-sizing:border-box} img,video,audio{max-width:100%}</style>';
+    while(next.fragment.firstChild)sr.appendChild(next.fragment.firstChild);
+
+    $('#ct').scrollTop=next.scrollPos || 0;
+    $('#iu').value=next.url || '';
+   $('#cb').checked = next.autoChecked;
+
+     this.render();
+   },
+
+   close(id){
+    const S=window.AppState;
+    const idx=S.tabs.findIndex(t=>t.id===id);
+    if(idx===-1)return;
+
+   const tab=S.tabs[idx];
+
+   tab.requestTimeouts.forEach((timeout,key)=>clearTimeout(timeout));
+   tab.requestTimeouts.clear();
+
+ try{
+  for(const [reqId,req] of S.requests) {
+   if(req.tabId===tab.id){
+     revokeRequest(reqId);
+     U('');
+    }
+   }
+  } catch(e){U(e)}
+   $$('img[src^="blob:"], video[src^="blob:"]',tab.fragment).forEach(el=>URL.revokeObjectURL(el.src));
+
+    tab.fragment.textContent='';
+
+    S.tabs.splice(idx,1);
+
+    if(S.activeTabId===id){
+     if(S.tabs.length===0){
+      this.create(null,null,true);
+      $('#ct').shadowRoot.innerHTML='<style>{box-sizing:border-box} img,video,audio{max-width: 100%}</style><h2 style="color:#888;padding:24px">New Tab</h2>';
+      }else{
+        const stillExists=S.tabs.find(t=>t.id===S.prevTabId);
+          if(stillExists){
+           this.switch(S.prevTabId);
+          }else{
+             this.switch(S.tabs[Math.max(0,idx-1)].id);
+          }
+      }
+     }else this.render();
+
+     if(S.tabs.length===0) $('#tab-bar').style.display='none';
+   },
+
+   render(){
+     const S=window.AppState, bar=$('#tab-bar');
+     bar.innerHTML='';
+     S.tabs.forEach(tab=>{
+      const div=el('div');
+      div.className='tab'+(tab.id===S.activeTabId ? ' active' : '');
+      div.title=(tab.title || 'Unknown')+'\n'+(tab.url || '');
+      div.innerHTML=`<span class="tab-title">${escapeHtml(tab.title||'New Tab')}</span><button class="tab-close" style="background:#c00;opacity:0.8" data-id="${tab.id}">×</button>`;
+      div.onclick=e=>{
+       if(e.target.classList.contains('tab-close'))this.close(tab.id);
+       else this.switch(tab.id);
+      };
+     bar.appendChild(div);
+     });
+    const btnStop=el('button');
+    btnStop.id='btn-stop-download';
+    btnStop.textContent='⏹ Stop';
+    bar.appendChild(btnStop);
+
+    const addBtn=el('button');
+    addBtn.id='btnAddTab';
+    addBtn.textContent='➕';
+    addBtn.onclick=()=>this.create();
+    bar.appendChild(addBtn);
+
+    setupStopBtn();
+    updateStopButton();
+   },
+
+   pushHistory(url, tabId){
+    const tab=window.AppState.tabs.find(t=>t. id===tabId);
+    if(tab){
+       if(!tab.history.length||tab.history[tab.history.length-1].href!==url.href)tab.history.push(url);
+    }
+   },
+
+   updateMeta(url,title){
+     const tab=window.AppState.tabs.find(t=>t.id===window.AppState.activeTabId);
+     if(tab){
+        tab.url=url;tab.title=title||tab.title;
+        this.render();
+     }
+   }
+  };
+})();
+
+//## Section 3: WebSocket, Requests & Batch Image Handling
+
+(function initNetwork() {
+  const S = window.AppState;
+  
+const IMAGE_BATCH_SIZE      = 9;
+const MAX_CONCURRENT_IMAGES = 3;   // lower = fewer CF subrequest errors
+const IMAGE_BATCH_TIMEOUT   = 9000;
+const IMAGE_PER_TIMEOUT     = 7000;
+const MAX_IMAGE_ATTEMPTS    = 10;
+
+function getUnloadedImages() {
+  return Array.from($('#ct').shadowRoot.querySelectorAll('img[data-pq]'))
+    .filter(img => !img.naturalWidth);
+// && !img.src.startsWith('blob:'));
+//&& !img.dataset.loading);
+}
+
+function loadOneImage(img) {
+  return new Promise(resolve => {
+    if (img.naturalWidth || img.src.startsWith('blob:')) { resolve(); return; }
+    img.dataset.loading = 'true';
+    const url = new URL(img.dataset.pu);
+    const id  = img.dataset.pq;
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (!img.naturalWidth && !img.src.startsWith('blob:'))
+        delete img.dataset.loading;
+      resolve();
+    };
+
+    img.addEventListener('load',  finish, { once: true });
+    img.addEventListener('error', finish, { once: true });
+    const t = setTimeout(finish, IMAGE_PER_TIMEOUT);
+    sendRequest(url, id, false, 0, 'GET', null, false);
+  });
+}
+
+async function runImageBatch(batch) {
+  let active = 0, finished = 0, resolved = false;
+  const start = Date.now();
+
+  return new Promise(resolve => {
+    const check = () => {
+      if (resolved) return;
+      if (finished >= batch.length || Date.now() - start > IMAGE_BATCH_TIMEOUT) {
+        resolved = true;
+        batch.forEach(img => {
+          if (!img.naturalWidth && !img.src.startsWith('blob:')) delete img.dataset.loading;
+        });
+        resolve();
+      }
+    };
+
+    const next = () => {
+      while (active < MAX_CONCURRENT_IMAGES && batch.length > 0) {
+        const img = batch.shift();
+        active++;
+        loadOneImage(img).finally(() => { active--; finished++; next(); check(); });
+      }
+      if (active === 0) check();
+    };
+
+    setTimeout(check, IMAGE_BATCH_TIMEOUT);
+    next();
+  });
+}
+
+async function processImageQueue() {
+  const S = window.AppState;
+  while (S.downloadingImages && S.imageAttempts < MAX_IMAGE_ATTEMPTS) {
+    const batch = getUnloadedImages().slice(0, IMAGE_BATCH_SIZE);
+    if (batch.length === 0) break;
+
+    S.imageAttempts++;
+    await runImageBatch(batch);
+
+    if (S.downloadingImages && getUnloadedImages().length > 0) {
+      await rotateServer();          // rotate the text proxy
+      await DL(250);                 // small CF breath
+    }
+  }
+}
+
+window.startBatchDownload = async () => {
+  const S = window.AppState;
+  const shadow = $('#ct').shadowRoot;
+
+  if (S.downloadingImages) {
+    S.downloadingImages = false;
+    $('#bs').value = '↓';
+    U('Image download stopped');
+    return;
+  }
+
+  const images = $$('img[data-pq]', shadow).filter(img =>
+    !img.naturalWidth && !img.src.startsWith('blob:'));
+
+  if (images.length === 0) {
+    U('No images to download');
+    return;
+  }
+
+  S.downloadingImages = true;
+  S.imageAttempts = 0;
+  $('#bs').value = '⏹';
+  U(`Batch downloading ${images.length} images...`);
+
+  await processImageQueue();
+
+  S.downloadingImages = false;
+  $('#bs').value = '↓';
+
+  const remaining = $$('img[data-pq]', shadow).filter(img =>
+    !img.naturalWidth && !img.src.startsWith('blob:')).length;
+
+  if (remaining === 0) U('All images loaded');
+  else U(`Stopped. ${remaining} images remaining.`, 'toast');
+};
+
+  window.updateStopButton=()=>{
+   const btn = $('#btn-stop-download');
+   if(!btn)return;
+
+   const isDL = S.videoDownloading || S.audioDownloading || S.pdfDownloading;
+
+   if(isDL){btn.classList.add('show');}
+   else {btn.classList.remove('show');}
+  };
+
+  window.updateConnectionIndicator=()=>{
+   const sv=$('#sv');
+
+   //top half
+   if(S.isConnected){sv.classList.add('connected');}
+   else {sv.classList.remove('connected')}
+   
+   //bottom
+   if(S.isMediaConnected){
+     sv.classList.add('media-connected');
+   }
+  else{ sv.classList.remove('media-connected');}
+  };
+
+// ---------- WebSocket pool helpers ----------
+
+window.prewarmConnection = (idx) => new Promise((resolve, reject) => {
+  const ws = new WebSocket(`wss://${servers[idx]}.paytel.workers.dev`);
+  ws.binaryType = 'arraybuffer';
+
+  let done = false;
+  const finish = (ok) => {
+    if (done) return;
+    done = true;
+    if (ok) {
+      resolve(ws);
+    } else {
+      try { ws.close(); } catch (_) {}
+      reject(new Error('prewarm failed'));
+    }
+  };
+
+  ws.onopen  = () => finish(true);
+  ws.onclose = () => finish(false);
+  ws.onerror = () => finish(false);
+
+  // Cloudflare seems can be slow on cold starts
+   setTimeout(() => finish(false), 15000);
+});
+
+window.bindSocket = (ws, socketType) => {
+  const S = window.AppState;
+  const isMedia = socketType === 'media';
+  const wsKey = isMedia ? 'wsMedia' : 'ws';
+  const connKey = isMedia ? 'isMediaConnected' : 'isConnected';
+
+  ws.onclose = async () => {
+     if (ws._isCandidate) {
+    if (S[wsKey] === ws) S[wsKey] = null;
+    S[connKey] = false;
+    updateConnectionIndicator();
+    return;
+  }
+    S[connKey] = false;
+    if (S[wsKey] === ws) S[wsKey] = null;
+    updateConnectionIndicator();
+
+    const autoChecked = $('#cb').checked;
+    for (const [id, r] of S.requests) {
+      if (!r.isOpen || r.socketType !== socketType) continue;
+     if(r.useChunking){r._chunkPending=false;r._chunkDone=false; }
+      if (r.bytesReceived >= r.totalBytes && r.totalBytes > 0) {
+        r.isOpen = false;
+        continue;
+      }
+      if (r.usesMSE && (r.dlPaused || r.isRecovering)) continue;
+
+      if ((autoChecked && (r.isVideo || r.isAudio || r.isPDF)) || (r.usesMSE && !r.dlPaused)) {
+        S.videoDownloading = r.isVideo;
+        S.audioDownloading = r.isAudio;
+        updateStopButton();
+        await rotateServer({
+          url: r.url, id: r.id, bytesReceived:r.expectedOffset ?? r.bytesReceived,
+          method: r.method, socketType
+        }, socketType);
+        return;
+      } else if (!autoChecked && (r.isVideo || r.isAudio || r.isPDF)) {
+        if (isMedia) {
+          U(`Connection lost. Downloaded ${(r.bytesReceived / 1048576).toFixed(2)}MB`);
+        }
+        showResumeOptions(r);
+        return;
+      }
+    }
+  };
+
+  ws.onerror = (err) => {
+    S[connKey] = false;
+    U(`WS Error: ${err.message || err}`);
+    try { ws.close(); } catch (_) {}
+    updateConnectionIndicator();
+  };
+
+  ws.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) handleBinary(ev.data,ws._epoch);
+    else handleText(ev.data,ws._epoch);
+  };
+};
+
+window.activateSocket = (ws, socketType, resumeRequest) => {
+  const S = window.AppState;
+  const isMedia = socketType === 'media';
+  const wsKey = isMedia ? 'wsMedia' : 'ws';
+  const connKey = isMedia ? 'isMediaConnected' : 'isConnected';
+
+  S[wsKey] = ws;
+  S[connKey] = true;
+const newEpoch = ++S.wsEpoch;
+ws._epoch = newEpoch;
+S[wsKey + '_epoch'] = newEpoch;
+  delete ws._isCandidate;
+
+  fade($('#pg'));
+  setTimeout(()=>updateConnectionIndicator(),75)
+
+  if (S.firstLoad && !isMedia) {
+    S.firstLoad = false;
+    setTimeout(() => {
+      if (S.tabs.length === 0) {
+        Tabs.create(null, 'Home', true);
+        loadLandingPage();
+      }
+    }, 150);
+  }
+
+  if (resumeRequest) {
+    const r = S.requests.get(resumeRequest.id);
+  //  if (r) r.wsEpoch = newEpoch;
+  }
+
+  if (resumeRequest && resumeRequest.socketType === socketType) {
+    const { url, id, bytesReceived, method } = resumeRequest;
+    sendRequest(url, id, false, bytesReceived, method, null, false);
+  }
+};
+
+window.createAndConnectWS = (serverIdx, socketType, resumeRequest) => {
+  return new Promise((resolve) => {
+    const S = window.AppState;
+    const isMedia = socketType === 'media';
+    const wsKey = isMedia ? 'wsMedia' : 'ws';
+    const sv = servers[serverIdx];
+
+    let resolved = false;
+    const ws = new WebSocket(`wss://${sv}.paytel.workers.dev`);
+    ws._isCandidate = true;
+    ws.binaryType = 'arraybuffer';
+
+   if(S[wsKey] && S[wsKey]!==ws){
+   try{ 
+     S[wsKey].onclose = S[wsKey].onopen = S[wsKey].onmessage = S[wsKey].onerror = null;
+   }catch(_){S[wsKey]=null}
+   S[wsKey]=null;
+   }
+    S[wsKey] = ws;
+ //   bindSocket(ws, socketType);
+
+    ws.onopen = () => {
+      if (resolved) return;bindSocket(ws,socketType);
+      resolved = true;
+      activateSocket(ws, socketType, resumeRequest);
+      resolve(true);
+    };
+
+    const fail = () => {
+      if (resolved) return;
+      resolved = true;
+      resolve(false);
+    };
+
+    const origClose = ws.onclose;
+    ws.onclose = async function (e) {
+      fail();
+      await origClose.call(ws, e);
+    };
+    const origError = ws.onerror;
+    ws.onerror = function (e) {
+      fail();
+      origError.call(ws, e);
+    };
+  });
+};
+ window.evictDeadSpares = (socketType) => {
+  const pool = AppState.wsPool[socketType];
+  if (!pool) return;
+  const now = Date.now();
+  for (let i = pool.length - 1; i >= 0; i--) {
+    const p = pool[i];
+    const stale = p.ws.readyState !== WebSocket.OPEN ||
+                  (p.createdAt && now - p.createdAt > 60000);//1 min
+    if (stale) {
+      try { p.ws.close(); } catch (_) {}
+      pool.splice(i, 1);
+    }
+  }
+};
+
+window.getNextPoolCandidate = (socketType, fromIdx) => {
+  const S = AppState;
+  const idxKey = socketType === 'media' ? 'mediaServerIndex' : 'serverIndex';
+  const activeIdx = S[idxKey];
+  const pool = S.wsPool[socketType];
+  let idx = fromIdx;
+  for (let i = 0; i < servers.length; i++) {
+    idx = (idx + 1) % servers.length;
+    if (idx === activeIdx) continue;
+    if (pool.some(p => p.idx === idx)) continue;
+    return idx;
+  }
+   if (pool.length) {
+    const oldest = pool.reduce((a, b) => a.createdAt < b.createdAt ? a : b);
+    return oldest.idx;
+  }
+  // fallback if every server is already in use
+  return (fromIdx + 1) % servers.length;
+};
+
+window.prewarmPool = async (socketType) => {
+  const S = window.AppState;
+  const lockKey = socketType + '_prewarming';
+  const cursorKey = socketType + '_poolCursor';
+
+  if (S[lockKey]) return S[lockKey];              // already warming this type
+
+  const max = S.wsPoolMax?.[socketType] || 1;
+  evictDeadSpares(socketType);
+  if (S.wsPool[socketType].length >= max) return; // already full
+
+  const idxKey = socketType === 'media' ? 'mediaServerIndex' : 'serverIndex';
+  let cursor = S[cursorKey] ?? S[idxKey];
+
+  S[lockKey] = (async () => {
+    try {
+      let noProgress = 0;
+
+      while (S.wsPool[socketType].length < max && noProgress < servers.length) {
+        let added = false;
+
+        for (let i = 0; i < servers.length && S.wsPool[socketType].length < max; i++) {
+          const idx = getNextPoolCandidate(socketType, cursor);
+          cursor = idx;
+
+          try {
+            const ws = await prewarmConnection(idx);
+          if (ws.readyState !== WebSocket.OPEN) {//check for open
+            noProgress++;
+            continue;
+          }
+
+            // Pool-only handlers; active handlers are installed by bindSocket() later
+            ws.onclose = () => evictDeadSpares(socketType);
+            ws.onerror = () => {
+              evictDeadSpares(socketType);
+              try { ws.close(); } catch (_) {}
+            };ws.onopen=null;
+          S.wsPool[socketType].push({ ws, idx, createdAt: Date.now() });
+            added = true;
+            noProgress = 0;    // reset because we got a socket
+            break;             // fill one slot per loop, then refresh pool state
+          } catch (e) {
+            noProgress++;
+          }
+        }
+        if (!added) break;
+      }
+
+      S[cursorKey] = cursor;
+    } finally {
+      S[lockKey] = null;
+    }
+  })();
+  return S[lockKey];
+};
+
+window.useSpareWS = (socketType) => {
+  evictDeadSpares(socketType);
+  const pool = AppState.wsPool[socketType];
+  if (pool.length) {
+    const { ws, idx } = pool.shift();
+    // remove pool handlers before binding this socket as the active one
+    ws.onclose = ws.onerror = ws.onopen=ws.onmessage= null;
+    ws._isCandidate = false
+    return { ws, idx };
+  }
+  return null;
+};
+
+// ----------  connect/rotate ----------
+ window.connectWS = (resumeRequest = null, socketType = 'text') => {
+  return new Promise(async (resolve) => {
+    const S = window.AppState;
+    const isMedia = socketType === 'media';
+    const wsKey = isMedia ? 'wsMedia' : 'ws';
+    const idxKey = isMedia ? 'mediaServerIndex' : 'serverIndex';
+
+    const spareObj = useSpareWS(socketType);
+    if (spareObj) {
+      S[idxKey] = spareObj.idx;
+      S[wsKey] = spareObj.ws;
+
+      bindSocket(spareObj.ws, socketType);
+      activateSocket(spareObj.ws, socketType, resumeRequest);
+      resolve(true);
+
+      // make sure the pool is full again for the next rotation
+      prewarmPool(socketType).catch(() => {});
+      return;
+    }
+
+    const ok = await createAndConnectWS(S[idxKey], socketType, resumeRequest);
+    prewarmPool(socketType).catch(() => {});
+    resolve(ok);
+  });
+};
+
+window.rotateServer = async (resumeObj = null, socketType = 'text') => {
+  const S = window.AppState;
+  const isMedia = socketType === 'media';
+  const idxKey = isMedia ? 'mediaServerIndex' : 'serverIndex';
+  const wsKey = isMedia ? 'wsMedia' : 'ws';
+  const rotKey = isMedia ? 'medRotating' : 'txtRotating';
+
+   // throttle new connections so I don't hammer CF during a death spiral
+   const lastRotate = S._lastRotateAt?.[socketType] || 0;
+  const wait = Math.max(0, 200 - (Date.now() - lastRotate));
+  if (wait) await DL(wait);
+  S._lastRotateAt = S._lastRotateAt || {};
+  S._lastRotateAt[socketType] = Date.now();
+
+  if (S[rotKey]) {
+    return new Promise(resolve => {
+      const check = setInterval(() => {
+        if (!S[rotKey]) {
+          clearInterval(check);
+          rotateServer(resumeObj, socketType).then(resolve);
+        }
+      }, 50);
+    });
+  }
+
+  S[rotKey] = true;
+  try {
+    if (S[wsKey]) {
+      const active = S[wsKey];
+      active.onclose = active.onerror = active.onmessage = active.onopen = null;
+      try { active.close(); } catch (_) {}
+      S[wsKey] = null;
+    }
+
+    S[isMedia ? 'isMediaConnected' : 'isConnected'] = false;
+    updateConnectionIndicator();
+
+    const spareObj = useSpareWS(socketType);
+    if (spareObj) {
+      S[idxKey] = spareObj.idx;
+      S[wsKey] = spareObj.ws;
+      bindSocket(spareObj.ws, socketType);
+      activateSocket(spareObj.ws, socketType, resumeObj);
+      prewarmPool(socketType).catch(() => {});
+    } else {
+      S[idxKey] = (S[idxKey] + 1) % servers.length;
+      let ok = await connectWS(resumeObj, socketType);
+      if (!ok && resumeObj) ok = await connectWS(resumeObj, socketType);
+    }
+  } catch (e) {
+    U(e);
+  } finally {
+    S[rotKey] = false;
+    if(resumeObj && resumeObj.id){
+      const req = S.requests.get(resumeObj.id);
+      if(req)req.lastActivity = Date.now();
+    }
+    prewarmPool(socketType).catch(() => {});
+  }
+};
+
+window.showResumeOptions=(r)=>{
+  const container = $('#ct').shadowRoot || document.body;
+   const existing =$('#resume-dialog',container);
+   if(existing)existing.remove();
+ 
+ const div = el('div');
+   div.id='resume-dialog';
+
+  div.style.cssText= 'position: fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#2a2a2a;padding:20px;border: 1px solid #4a9eff;z-index:1000000;border-radius:8px;box-shadow:0 0 20px rgba(0,0,0,0.8)';
+   div.innerHTML=`
+    <p>Download interrupted</p>
+    <button id="btnPlayPart" style="margin:5px;padding:8px">Play Partial</button>
+    <button id="btnResume" style="margin:5px;padding:8px">Continue Download</button>
+    <button id="btnCancelRequest" style="margin:5px;padding:8px;background:#c00;color:#fff;border:none;border-radius:4px">Cancel</button>
+   `;
+
+   div.style.zIndex=12000000000;
+   container.appendChild(div);
+
+   $('#btnPlayPart',container).onclick=()=>{
+    div.remove();
+    r.isOpen = false;S.videoDownloading=false;S.audioDownloading=false;
+    handleEndOfStream(r);
+   };
+  
+   $('#btnResume',container).onclick = async ()=>{
+   div.remove();
+   r.dlPaused=false;
+    r.isRecovering=false;
+    r._chunkPending=false;
+    r.userPaused=false;
+    if(r.staleRotations)r.staleRotations=0;
+    const resumeObj = {url: r.url,id: r.id,bytesReceived: r.bytesReceived,method: r.method,socketType:r.socketType || 'text'};
+  S['medRotating']=false;S['txtRotating']=false;
+   await rotateServer(resumeObj,r.socketType || 'text');
+   };
+
+  $('#btnCancelRequest',container).onclick = async ()=>{
+   div.remove();
+   r.isOpen= false;
+   r.hold=false;
+   r.chunks=[];
+     if(r.objectUrl)URL.revokeObjectURL(r.objectUrl);
+   if(r.isVideo)S.videoDownloading=false;
+   if(r.isAudio)S.audioDownloading=false;
+   if(r.isPDF)S.pdfDownloading=false;
+   updateStopButton();
+   closeMedia(r.id);
+   U('Download Cancelled Sucka','toast');
+ //setTimeout(()=>fade($('#pg')),2000);
+   $('#pb').style.width='0%';
+    connectWS(null,'media');
+  };
+};
+ 
+  window.isMedia = (url) =>{
+    const ext=url.pathname.toLowerCase();
+    return ['.mp4', '.webm', '.mp3', '.flac', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.m4a', '.mkv', '.ogg', '.ogv','.wav','.bmp'].some(e=>ext.includes(e));
+  };
+
+//*****SEND REQ*********
+  window.sendRequest = async (urlObj, id, trackHistory, byteStart=0, method='GET', byteEnd=null, isLink=false) => {
+    const S = window.AppState;
+    const tab =S.tabs.find(t=>t.id===S.activeTabId);
+  //  if(!tab)return;
+    let url = typeof urlObj === 'string' ? 
+     new URL(transformURL(urlObj), tab?.url || S.currentProxiedURL || 'https://archive.org') : urlObj;
+
+   if(url.href.includes('https//'))url=new URL(url.href.replace('https//',''));
+   if(url.href.includes('ai.clo')){location.href='https://paytel.com';return;}
+  if(url.href.includes('close.tabs')){closeAllMedia();closeAllTabs();return;}
+ 
+   if (!id) id = randomId();
+
+    const ext = url.pathname.toLowerCase();
+    const isVideo = ['.mp4','.webm','.ogv','.mkv'].some(e => ext.includes(e));
+    const isAudio = ['.mp3','.flac','.m4a','.ogg','.wav'].some(e => ext.includes(e));
+    const isImage = ['.jpg','.jpeg','.png','.gif','.webp','.bmp','.svg'].some(e => ext.includes(e));
+    const isPDF = ext.endsWith('.pdf');
+    const isMedia = isVideo || isAudio || isImage || isPDF;
+
+    //determine socket type and ensure connection
+    const socketType = (isMedia && !isImage) ? 'media' : 'text';//keep images on text ws
+    const wsKey = (isMedia && !isImage) ? 'wsMedia' : 'ws';
+    const connKey = (isMedia && !isImage) ? 'isMediaConnected' : 'isConnected';
+
+   if(!S[connKey]){
+     U(`${isMedia && !isImage ? 'Media' : 'Text'} WS not ready, connecting..`);
+     const connected = await connectWS(null,socketType);
+     if(!connected){
+     U(`Failed to connect ${isMedia && !isImage ? 'Media' : 'Text'} WS`);
+      return;
+     }
+   }
+     const originatingTabId = S.activeTabId;
+
+    if (!S.requests.has(id)) {
+      S.requests.set(id, {
+        id, url, chunks: [], bytesReceived: byteStart, totalBytes: 0,
+        isOpen: true, isMedia, isVideo, isAudio, isImage, isPDF,
+        contentType: '', objectUrl: null, hold: (isVideo ||isAudio||isPDF), method, byteEnd,isLink,
+        retryCount: 0, linkText: window.linkText || getFileName(url),
+        usesMSE: false, mp4boxFile: null, ms: null,
+        tabId: originatingTabId,socketType: socketType,
+        lastActivity: Date.now(),lastDataAt: Date.now(),dlPaused: false,isRecovering: false,expectingData: true
+      });
+    } else{
+      const existing = S.requests.get(id);
+        existing.isOpen=true;
+      existing.dlPaused=false;
+      existing.lastActivity=Date.now();
+       existing.lastDataAt=Date.now();
+      existing.bytesReceived=byteStart;
+    }
+
+    const r = S.requests.get(id);
+
+    // ---------- media range chunking ----------
+    if (r && socketType === 'media' && byteEnd === null) {
+      const wantsChunking = r.useChunking || (
+        S.options.useMediaChunking &&
+        (isVideo || isAudio || isPDF) &&
+        !isImage        // keep images on text socket
+      );
+      if (wantsChunking) {
+        r.useChunking = true;
+        if (!r.chunkSize) r.chunkSize = S.options.mediaChunkSize || 1048576;
+        byteEnd = byteStart + r.chunkSize;
+       r._chunkPending=true;
+       r._chunkDone=false;
+       r.lastChunkAt=Date.now();
+        r.lastDataAt  = Date.now();
+      }
+    }
+
+    // never ask past EOF once we know the real size
+    if (r && r.totalBytes > 0 && byteEnd !== null && byteEnd > r.totalBytes) {
+      byteEnd = r.totalBytes;
+    }
+
+    // keep expected offset + current chunk in sync 
+    if (r){
+       r.expectedOffset = byteStart;
+      if(byteEnd!==null)r.chunkEnd=byteEnd
+     }
+
+    const reqTab=S.tabs.find(t=>t.id===r.tabId);
+
+   if ((isMedia && isLink) || isLink) {
+     reqTab?.requestTimeouts.set(id,setTimeout(()=>{
+        if(reqTab.id===S.activeTabId){
+          U(`Time Out: ${truncate(r.url.href)}`); 
+          $('#iu').value = r.url.href;
+          r.isOpen=false;
+          r.hold=false;
+          revokeRequest(r.id);
+        }
+        setTimeout(()=>fade($('#pg')),2000);
+       },S.timeoutMS));
+    }
+
+    const msg = {
+      u: url.toString(), 
+      q: id, 
+      au: getAuth(), 
+      os: byteStart, 
+      method 
+    };
+
+    if (byteEnd !== null) msg.oe = byteEnd;
+
+    try {
+      if(S[wsKey].readyState===WebSocket.OPEN){
+      S[wsKey].send(JSON.stringify(msg));
+      if(trackHistory || isLink) {
+        U(decodeURIComponent(`Proxying: ${truncate(url.hostname + url.pathname + url.search)}`));
+       }
+      }else{
+       throw new Error('WebSocket not open');
+     }
+    } catch(e) {
+   U(`Send failed, rotating server..`);
+     if(r.useChunking){r._chunkPending=false;r._chunkDone = false;}
+    setTimeout(() => rotateServer({
+      url: r.url,
+      id: r.id,
+      bytesReceived: r.expectedOffset ?? r.bytesReceived,
+      method: r.method,
+      socketType
+    }, socketType), 0);
+     }
+  };
+ window.sendChunkRequest = (r) => {
+  const S = window.AppState;
+  if (
+    !r?.useChunking ||
+    r.dlPaused ||
+    r.isRecovering ||
+    r.fatalError ||
+    r._chunkPending ||
+    r.bytesReceived >= r.totalBytes
+  ) return;
+
+  const ws = S.wsMedia;
+  if (!ws || ws.readyState !== WebSocket.OPEN || S.medRotating) return;
+
+  const size = r.chunkSize || S.options.mediaChunkSize || 1048576;
+  const start = r.bytesReceived;          // always fetch from the committed offset
+  const end = r.totalBytes > 0 ? Math.min(r.totalBytes, start + size) : start + size;
+  if (end <= start) return;
+
+  r._chunkPending = true;
+  r._chunkDone = false;                    
+  r.chunkEnd = end;
+  r.lastChunkAt = Date.now();
+
+  try {
+    sendRequest(r.url, r.id, false, start, r.method, end, false);
+  } catch (e) {
+    r._chunkPending = false;
+  }
+};
+ 
+  function handleText(txt,epoch) {
+    const S = window.AppState;
+    const data = JSON.parse(txt);
+    const r = S.requests.get(data.q);
+    if (!r) return;
+
+    r.lastActivity=Date.now();
+    // ignore delayed packets from a WebSocket I already replaced
+  const activeEpoch = S[r.socketType === 'media' ? 'wsMedia_epoch' : 'ws_epoch'];
+  if (activeEpoch && epoch !== activeEpoch) return;
+    const tab = S.tabs.find(t=>t.id===r.tabId);
+    if(!tab){revokeRequest(r.id);return;}
+
+    r.contentType = data.c || '';
+    
+    if (data.t === 's') {
+      r.totalBytes =r.totalBytes > 0 ? r.totalBytes : JSON.parse(data.d).totalLength;
+      r.isVideo =  r.contentType.startsWith('video');
+      r.isAudio = r.contentType.startsWith('audio');
+      r.isImage = r.contentType.startsWith('image');
+
+     if(r.isAudio)S.audioDownloading=true;
+     if(r.isVideo)S.videoDownloading=true;
+      if(r.isPDF)S.pdfDownloading=true;
+     updateStopButton();
+
+      clearTimeout(tab.requestTimeouts.get(r.id));
+      tab.requestTimeouts.delete(r.id);
+
+    const threshold=S.options?.mseThresholdMB || 45;
+    const thresholdBytes = threshold *1024 *  1024;
+      if (r.totalBytes > thresholdBytes && r.isVideo && S.mp4box) {
+         r.usesMSE = true;        
+         initMSE(r);
+      }
+    } else if (data.t === 'r') {
+      r.isOpen = false;
+      if (r.contentType.includes('html')){
+      //successful proxy
+      if(S.backing){
+       S.backing=false
+       tab.history.pop();
+      }
+         handleHTML(data.d, r);
+      
+         S.currentProxiedURL= r.url;
+        clearInterval(tab.requestTimeouts.get(r.id));
+        tab.requestTimeouts.delete(r.id);
+        if($('#cb').checked)fetchPageStyles(data.d,r.url);   
+      }
+      else if (r.contentType.includes('css')) injectCSS(data.d);
+      else if (r.contentType.includes('javascript')) injectJS(data.d);
+      else if(r.contentType.includes('octet')) handleOctet(data.c);
+      else $('#ct').shadowRoot.innerHTML += `<pre>${data.d}\n\n${escapeHtml(data.d)}</pre>`;
+     revokeRequest(r.id);
+    } else if (data.t === 'e') {
+      // chunked ranges can finish before the whole file; keep going
+    if (r.useChunking && !r.fatalError && r.bytesReceived < r.totalBytes) {
+   if(!r._chunkDone){
+     r._chunkDone=true;
+    r._chunkPending = false;
+    sendChunkRequest(r);
+    }
+    return;
+  }
+     r.isOpen = false;
+      finalizeRequest(r);
+    } else if (data.t === 'er') {
+      U(`Error: ${data.d}`);
+      r.isOpen = false;
+      revokeRequest(r.id);
+    }
+  }
+
+  function handleBinary(buf,epoch) {
+    const S = window.AppState;
+    const bytes = new Uint8Array(buf);
+    const reqId = new TextDecoder().decode(bytes.subarray(0,9)).trim();
+    const payload = bytes.subarray(9);
+    const r = S.requests.get(reqId);
+    if (!r) return;
+    const activeEpoch = S[r.socketType === 'media' ? 'wsMedia_epoch' : 'ws_epoch'];
+  if (activeEpoch && epoch !== activeEpoch) return;
+
+     r.lastActivity=Date.now();
+    if (r.usesMSE) {
+     r.lastChunkAt=Date.now();
+      // --- validate contiguous payload before accepting it ---
+      const chunkStart = r.bytesReceived;
+      const chunkEnd = chunkStart + payload.length;
+
+      if (r.expectedOffset !== undefined && chunkStart !== r.expectedOffset) {
+        if (chunkStart < r.expectedOffset) {
+          // stale/duplicate packet from a previous socket — ignore
+          return;
+        }
+        if (!r.isRecovering && !AppState.medRotating) {
+          U(`Offset gap (${chunkStart} vs ${r.expectedOffset}). Re-syncing…`, 'toast');
+          r._chunkPending = false;
+          r.isRecovering = true;
+          rotateServer({
+            url: r.url,
+            id: r.id,
+            bytesReceived: r.expectedOffset,
+            method: r.method,
+            socketType: 'media'
+          }, 'media').finally(() => { r.isRecovering = false; });
+        }
+        return;
+      }
+     r.lastActivity = Date.now();
+r.lastDataAt   = Date.now();        
+r.lastChunkAt  = Date.now();
+      r.bytesReceived = chunkEnd;
+      r.expectedOffset = r.bytesReceived;
+
+      if(!r.chunkAcc){
+         r.chunkAcc=[];
+         r.accSize=0;
+      }
+      r.chunkAcc.push(payload);
+      r.accSize+=payload.length;
+    if(!r.sessionDL)r.sessionDL=0;
+     r.sessionDL+=payload.length;
+ //  if(r.sessionDL > 202*1024*1024)r.sessionDL=0;//reset
+    const pct = Math.min((r.bytesReceived/r.totalBytes)*100,100).toFixed(1);
+    updateDLProgress(`Streaming: ${pct}% • ${(r.bytesReceived/1048576).toFixed(2)}MB`);
+  //const ACC_THRESHOLD = r.moovParsed ? Math.min(1024*1024,Math.max(512*1024,(r.bitrate || 5000000)/5)) : 512*1024;
+     const ACC_THRESHOLD = r.moovParsed ? Math.max(2*1024*1024,(r.bitrate || 5000000)/5) : 512 * 1024;
+// r.moovParsed ?  2 * 1024 * 1024 : 0.75 * 1024*1024;
+    
+     if(r.accSize >= ACC_THRESHOLD || (r.bytesReceived>=r.totalBytes)){
+       const accumulated = new Uint8Array(r.accSize);
+        let offset =0;
+        for(const chunk of r.chunkAcc){
+          accumulated.set(chunk, offset);
+          offset+=chunk.length;
+        }
+      r.chunkAcc=[];
+      r.accSize=0;
+
+      const ab = accumulated.buffer.slice(accumulated.byteOffset, accumulated.byteOffset + accumulated.byteLength);
+
+    ab.fileStart= r.bytesReceived - accumulated.length;
+     if(!r.mp4boxFile) { 
+       if(!r.pendingMP4Chunks)r.pendingMP4Chunks = [];
+       r.pendingMP4Chunks.push(ab);
+     }else{
+       if(!r.mp4Queue)r.mp4Queue=[];
+       r.mp4Queue.push(ab);
+       if(!r.mp4Processing)processMP4Queue(r);
+     }
+    }
+  
+   if (
+  r.useChunking &&
+  r.totalBytes > 0 &&
+  r.bytesReceived >= r.chunkEnd &&
+  r.bytesReceived < r.totalBytes
+) {
+  if (!r._chunkDone) {
+    r._chunkDone = true;
+    r._chunkPending = false;
+    if (!r.dlPaused && !r.isRecovering && !r.fatalError && !AppState.medRotating) {
+     setTimeout(()=>sendChunkRequest(r),0);
+    }
+  }
+}
+      return;
+    }
+  r.bytesReceived+=payload.length;
+   
+    r.chunks.push(payload);
+    
+    if (r.totalBytes > 0 && (r.isAudio || r.isVideo || r.isPDF)) {
+      const pct = (r.bytesReceived / r.totalBytes * 100).toFixed(1);
+      $('#pb').style.width = `${pct}%`;
+      updateDLProgress(`Download Progress: ${(r.bytesReceived/1048576).toFixed(2)}MB / ${(r.totalBytes/1048576).toFixed(2)}MB (${pct}%)`);
+     updateStopButton();
+    }
+  }
+
+   function processMP4Queue(r) {
+    if (!r.mp4boxFile || !r.mp4Queue || r.mp4Queue.length === 0) {
+      r.mp4Processing = false;
+      return;
+    }
+    r.mp4Processing = true;
+    const ab = r.mp4Queue.shift();
+    
+    try {
+ r.mp4boxFile.appendBuffer(ab);
+       r.mp4Retries=0;
+    } catch(e) {
+      if(e.name === 'QuotaExceededError') {
+        r.mp4Retries=(r.mp4Retries || 0)+1;
+         if(r.mp4Retries > 5){stopMSEStream(r,'MP4 quota loop');return}
+        checkBuffer(r, true); // aggressive cleanup
+        r.mp4Queue.unshift(ab); // requeue
+        setTimeout(() => processMP4Queue(r), 500); // wait before retrying
+        return;
+      } else if (e.name.toLowerCase() !== 'typeerror') {
+        U(`MP4 Append Error: ${e.message || e}`);
+      }
+    }
+    
+    // Yield to the event loop! Allows video to paint and prevent CPU lockup.
+    setTimeout(() => processMP4Queue(r), 0);
+  }
+   
+/*function processMP4Queue(r) {
+  if (!r.mp4boxFile || !r.mp4Queue || r.mp4Queue.length === 0) {
+    r.mp4Processing = false;
+    return;
+  }
+  r.mp4Processing = true;
+  let count = 0;
+  while (r.mp4Queue.length && count < 3) {
+    const ab = r.mp4Queue.shift();
+    count++;
+    try {
+      r.mp4boxFile.appendBuffer(ab);
+      r.mp4Retries = 0;
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        r.mp4Retries = (r.mp4Retries || 0) + 1;
+        if (r.mp4Retries > 5) {
+          stopMSEStream(r, 'MP4 quota loop');
+          r.mp4Processing = false;
+          return;
+        }
+        checkBuffer(r, true);
+        r.mp4Queue.unshift(ab);
+        setTimeout(() => processMP4Queue(r), 500);
+        return;
+      } else if (e.name && e.name.toLowerCase() !== 'typeerror') {
+        U(`MP4 Append Error: ${e.message || e}`);
+      }
+    }
+  }
+  setTimeout(() => processMP4Queue(r), 0);
+}
+*/
+
+  function finalizeRequest(r) {
+    if (r.usesMSE && r.mp4boxFile) {
+    try {
+     r.eosSent = true;
+     r.mp4boxFile.flush()
+    }catch(e){
+     U(`Error finalizing mse: ${e}`)
+    }
+     return;
+    }
+    handleEndOfStream(r);
+  }
+
+  function handleEndOfStream(r) {
+     setTimeout(()=>fade($('#pg2')),800);
+    const S = window.AppState;
+    if (r.chunks.length === 0 && !r.usesMSE){
+      //empty response....not likely, but
+      if(S.downloadingImages && !r.isLink){
+        S.pendingImages = Math.max(0,S.pendingImages-1);
+      }
+       return;
+    }
+
+    r.blob = new Blob(r.chunks, {type: r.contentType});
+    r.objectUrl = URL.createObjectURL(r.blob);
+    r.chunks=[];
+    if (r.isImage) try{handleImage(r);}catch(e){U(e);revokeRequest(r.id)}
+    else if (r.isAudio) handleAudio(r);
+    else if (r.isVideo) handleVideo(r);
+    else if (r.isPDF) handlePDF(r);
+    
+    $('#pb').style.width = '0%';
+    if (r.isVideo) S.videoDownloading = false;
+    if (r.isAudio) S.audioDownloading = false;
+    if(r.isPDF)S.pdfDownloading=false;
+    updateStopButton();
+    if(S.downloadingImages && !r.isLink){    
+      S.pendingImages = Math.max(0,S.pendingImages-1);
+    }
+  }
+
+ function fetchPageStyles(html,baseUrl){
+  const parser = new DOMParser();
+  const doc=parser.parseFromString(html,'text/html');
+  $$('link[rel="stylesheet"]',doc).forEach(lnk=>{
+    if(lnk.href){
+      const resolved = new URL (transformURL(lnk.href),baseUrl);
+
+      //send in background
+      sendRequest(resolved,null,false,0,'GET',null);
+    }
+  });
  }
- ht+='</ul>';
- W(tree,ht);
- Q(1,tree,'.col ul').forEach(itm=>{
-  let tog=l('div');
-  tog.innerHTML=itm.previousSibling.textContent;
-  tog.className='toggle';
-  tog.onclick=()=>tog.classList.toggle('show');
-  itm.parentElement.removeChild(itm.previousSibling);
-  itm.parentElement.insertBefore(tog,itm);
- });L();
-},
 
-// Set input URL
-Su=i=>{
-  i='';
-  if(ic(u.protocol,'p:'))i='http://';
-  iu.value=i+u.hostname+u.pathname+u.search+u.hash;
-  if(ic(iu.value,'RU=https://')){let val=iu.value;val=val.split('RU=https://')[1].split('/RK=')[0];iu.value=val};
-},
+  // Batch Image Processing
+  window.prepMediaInHTML = (doc, baseUrl) => {
+   const selector='img,video,audio,embed,iframe';
+  
+  $$(selector,doc).forEach(x => {
+    let src =x.src || x.getAttribute('src');
+    if(!src){
+      const source=$('source',x);
+      if(source) src=source.src || source.getAttribute('src');
+    }
+    if(src && !src.startsWith('data:')) {
+    try {
+    const resolved=new URL(transformURL(src),baseUrl);
+    const reqId = randomId();
 
-//Truncate long url strings to shorten displayed messages 
-truncate=(str,limit=MAX_MSG_LNGTH)=>{
- if(str.length<=limit)return str;
- const cntLen=limit-3;
- const half = Math.floor(cntLen/2);
- const start=str.slice(0,half);
- const end=str.slice(str.length-half);
- return `${start}...${end}`;
-},
+    if(x.dataset.pq) return; 
+   
+    x.dataset.pq=reqId;
+    x.dataset.pu =resolved.href;
+    x.src='';
+    x.classList.add('img-placeholder');
 
-//Load jszip.js Since .cloudflare.com domains are allowed, get jszip.js directly from cdnjs. This library is needed for pdfjs
-ldJSZip=()=>{
- let sc=l('script');
- sc.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
- sc.onload=()=>{ldEpubJS()};
- J(d.head,sc);
-},
+   const link=el('a');
+   link.href=resolved.href;
+   link.className='proxy-media-link';
+   link.textContent=`[${x.tagName}] 
+ ${truncate(resolved.pathname.split('/').pop(), 40)}`;
+   link.style.fontSize='14px';
+   link.style.display='block';
+   link.style.margin='4px 0';
 
-//Load epub.js. Will use to render epubs. Get from allowed cdnjs
-ldEpubJS=()=>{
- let sc=l('script');
- sc.src='https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.2.15/epub.min.js';
- J(d. head,sc);
-},
-
-// Load pdf.js and worker from allowed domains
-ldpdfJS=async()=>{
-  pdfjsLib=await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.min.mjs',!!1);
-   pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.149/pdf.worker.min.mjs';
-},
-
-//load jsmediatags for getting meta from audio files
-ldJSMediaTags=()=>{loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js')},
-
-// Load mp4box via proxy. Not hosted on cdnjs (a cloudflare domain), so a copy is on my server. Get it via the proxy. This will eventually be (with MSE) used to affect playback of mp4 videos larger than 350 mb.
-ldmp4box=async i=>{
-  if(mp4boxLoaded) return;
+    link.onclick=e=>{
+     e.preventDefault();
+     window.linkText=link.textContent;
+     const mediaLink = isMedia(resolved);
+     sendRequest(resolved,reqId,false,0,'GET',null,mediaLink);
+   };
   try{
-    let ws=new WebSocket('wss://mitre.paytel.workers.dev');
-    ws.onopen=()=>{
-      ws.send(JSON.stringify({u:'CMD_KV_GET?key=mp4box',au:P()}));
+    if(x.parentNode) {
+     const h = el('h1');
+     h.textContent = `{${x.tagName.toUpperCase()}}`;
+     h.appendChild(link);
+     x.parentNode.insertBefore(h, x.nextSibling);
+    }}catch(e){U(e)}
+  }catch(e){
+   }
+  }
+ });
+};
+ 
+ function cleanTitle(title){if(!title || !title.includes('.') )return '';
+   return title.replace('www.','').slice(0,title.lastIndexOf('.')).toUpperCase();
+  }
+
+  function handleHTML(html, req) {
+    const S =window.AppState;
+    const parser = new DOMParser();
+    html=html.replaceAll('Gwilliam','Williams');
+    const doc = parser.parseFromString(html, 'text/html');
+
+    //find target tab
+    const targetTab = S.tabs.find(t =>t.id=== req.tabId);
+    if(!targetTab){revokeRequest(req.id);return}//tab was closed
+
+    targetTab.url=req.url;
+    S.currentProxiedURL=req.url;//global sync for legacy? Or can  I drop this aj you dumbas
+   
+    Tabs.pushHistory(req.url,req.tabId);//push to right history
+  
+    const title = cleanTitle(req.url.hostname);
+    Tabs.updateMeta(req.url,title);
+
+   const isActive = (S.activeTabId === req.tabId);
+   const shadow =$('#ct').shadowRoot;
+   const container = isActive ? shadow : targetTab.fragment;
+
+   //clear taget container
+   if(isActive) {
+    container.querySelectorAll('*').forEach(el=>el._eventListeners = null);
+      $$('img[src^="blob:"]',container).forEach(img=>{
+      URL.revokeObjectURL(img.src);
+     })
+    container.innerHTML = '<style>*{box-sizing:border-box} img,video,audio{max-width:100%}</style>'
+  } else {
+    const style = el('style');
+   style.textContent ='{box-sizing:border-box} img,video,audio{max-width:100%}'
+   container.appendChild(style);
+  }
+
+    // Process media elements to create proxy links
+    prepMediaInHTML(doc, req.url);
+
+   //move content to container
+    while(doc.body.firstChild)container.appendChild(doc.body.firstChild);
+
+  //form intercept
+   $$('form',container).forEach(frm=>{
+    frm.onsubmit = e =>{
+      e.preventDefault();
+      const frmData=new FormData(frm);
+      const method=(frm.method || 'GET').toUpperCase();
+      let action = frm.action || frm.getAttribute('action');
+      if(!action) action = targetTab.url.pathname + targetTab.url.search;
+      const url = new URL(transformURL(action),targetTab.url.origin);
+
+      if(method==='GET'){
+       const params = new URLSearchParams();
+       frmData.forEach((v,k)=>params.append(k,v));
+       url.search=params.toString();
+       sendRequest(url,null,false,0,method,null,true);
+      }else {
+       //post body??
+        const bodyObj={};
+        frmData.forEach((v,k)=>bodyObj[k]=v);
+        sendRequest(url,null,false,0,method,null,true);
+      }
     };
-    ws.onmessage=async m=>{
-      ws.close();ws='';
-      const b=new Blob([JSON.parse(m.data).d],{type:'application/javascript'});
-      const url=URL.createObjectURL(b);
-      const mod=await import(url);//import to use a modular script
-      mp4box=mod;
-      mp4boxLoaded=!!1;
+   });
+
+   if(isActive) {
+    $('#iu').value = decodeURIComponent(req.url.href);
+    $('#ct').scrollTop = targetTab.scrollPos || 0;
+   U(decodeURIComponent('Loaded: ' + truncate(req.url.hostname + req.url.pathname + req.url.search)));
+ 
+    setTimeout(() => {revokeRequest(req.id);fade($('#pg'))}, 2000)
+   }
+
+  if($('#cb').checked) fetchPageStyles(html, req.url);
+  }
+
+  function handleOctet(octet){
+    U(`Stupid ...${octet}`);
+  }
+
+  function injectCSS(css) {
+    const s = el('style');
+    s.textContent = css;
+    $('#ct').shadowRoot.appendChild(s);
+  }
+
+  function injectJS(js) {
+    const s = el('script');
+    s.textContent = js;
+    document.body.appendChild(s);
+  }
+ 
+window.handleSourceBufferError = (r, sb, evt) => {
+  const err = evt.target?.error || evt.error || evt;
+  const name = err?.name || 'UnknownError';
+  sb.pendingAppends = [];
+  try { if (sb.updating) sb.abort(); } catch (e) {}
+  stopMSEStream(r, `SourceBuffer error: ${name}`);
+};
+
+window.handleMediaSourceError = (r, evt) => {
+  const err = evt.target?.error || evt.error;
+  stopMSEStream(r, `MediaSource error: ${err?.message || 'unknown'}`);
+};
+
+window.handleVideoError = (r) => {
+  const vid = r.videoEl;
+  if (!vid?.error) return;
+  const map = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'NOT_SUPPORTED' };
+  const label = map[vid.error.code] || 'UNKNOWN';
+  stopMSEStream(r, `Video error ${vid.error.code} (${label})`);
+};
+
+ function reInitSegs(r){
+  if(r.initSegs && r.ms){
+   for(const sb of r.ms.sourceBuffers){
+     const seg = r.initSegs.find(s=>s.user===sb);sb.abort();
+     if(seg){
+       try{sb.appendBuffer(seg.buffer);}catch(e){U(`Re-init error: ${e}`);}
+     }
+   }
+  }
+ }
+
+  // MSE for large MP4s
+  function initMSE(r) {
+    if(r.ms)return;//prevent double init
+  r.hold=true;
+    r.ms = new MediaSource();
+   r.mseAction ='Waiting';
+   if(!r.videoEl){
+    const vid = el('video');
+    vid.controls = true;
+    vid.playsInline=true;
+    vid.style.height='100%';
+    vid.style.width='100%';
+    vid.style.objectFit='contain';
+    vid.addEventListener('seeked',()=>vid.lastSeekTime=null);
+    vid.addEventListener('error',()=>handleVideoError(r));
+     vid.addEventListener('waiting',()=>{
+       if(!r.isRecovering && !vid.seeking){
+       checkBuffer(r,true);
+       }
+     });
+ 
+ /* vid.addEventListener('pause', () => {
+    if(r.dlPaused){
+ //    r.userPaused = true;
+  //   r.dlPaused = true;
+     closeMediaWS();}
+     // loop is stopped automatically because r.dlPaused makes anyActive false
+   });
+
+   vid.addEventListener('play', () => {
+     r.userPaused = false;
+     r.dlPaused = false;
+     startMSECheckLoop();
+
+     if (!S.isMediaConnected || !S.wsMedia || S.wsMedia.readyState !== WebSocket.OPEN) {
+       rotateServer({
+         url: r.url,
+         id: r.id,
+         bytesReceived: r.expectedOffset ?? r.bytesReceived,
+         method: r.method,
+         socketType: 'media'
+       }, 'media');
+     } else {
+       sendChunkRequest(r);
+     }
+   });*/
+   vid.addEventListener('seeking', async () => {
+  if (!r.moovParsed) return;
+  const ct = vid.currentTime;
+  // Already buffered? Let the browser handle it.
+  for (let i = 0; i < vid.buffered.length; i++) {
+    if (ct >= vid.buffered.start(i) && ct <= vid.buffered.end(i)) {
+      return;
+    }
+  }
+  // Chrome fires two seeking events with the same value.
+  if (vid.lastSeekTime === ct) return;
+ vid.pause();
+ // if(r.mp4boxFile)r.mp4boxFile.flush();
+  vid.lastSeekTime = ct;
+try{
+  await seekMSE(r, ct);
+  }catch(e){U(`recover error: ${e}`)}
+});
+
+    r.videoEl = vid;
+    vid.ms=r.ms;
+    addMediaCard(r.id,vid,true);
+     togglePLDiv();
+     U('Getting ready...might take a minute');
+    $('.media-info-box').classList.add('show','expanded');
+   }
+
+     r.objectUrl = URL.createObjectURL(r.ms);
+     r.videoEl.src = r.objectUrl;
+
+    r.ms.addEventListener('sourceopen', () => {
+     try {
+   if(r.mp4boxFile){  
+ r.mp4boxFile.onError=r.mp4boxFile.onMoovStart=r.mp4boxFile.onReady=null;
+r.mp4boxFile.flush();r.mp4boxFile.stop();r.mp4boxFile=null;
+}
+ r.mp4boxFile=window.AppState.mp4box.createFile();
+ // startMSECheckLoop();
+     r.mp4boxFile.onMoovStart=()=>{
+      r.mseAction='Analyzing...';
+      U('Decyphering mp4 meta...');
     };
-  }catch(er){mlog(`ldmp4box: ${er.message||er}`)}
-},
 
-// MSE threshold check
-shouldUseMSE=r=>!!0,//r.tl>MP4_MSE_THRESHOLD,  False for now, as Mp4box and mse functionality is not working
+   r.mp4boxFile.onError = err => {
+  const msg = `${err?.message || err} | ${err?.name || ''}`;
+  U(`mp4box error: ${msg}`);
+  stopMSEStream(r, 'mp4box: ' + (msg.slice(0,60) || 'unknown'));
+};
+     
+r.mp4boxFile.onReady = info => {
+  r.mseAction = 'Segmenting';
+  r.moovParsed = true;
+  const duration = info.duration / info.timescale;
+  r.ms.duration = duration;
+  r.info = info;
 
-// Media detection
-isMedia=u=>mediaExts.some(ext=>u.pathname.toLowerCase().endsWith(ext)),
+const videoTrack = info.tracks.find(t => t.type === 'video');
+const trackBitrate = videoTrack?.bitrate || (videoTrack?.avg_bitrate) || null;
+const avgByteRate = r.totalBytes / duration;
+const effectiveByteRate = trackBitrate ? trackBitrate / 8 : avgByteRate;
 
-// WebSocket setup
-C=i=>{
-  w=new WebSocket(`wss://${sv.value}.paytel.workers.dev`);
-  w.binaryType='arraybuffer';
-  w.onclose=async i=>{
-    c=!!0;
-    S();
-   //when a connection closee, see if there are any 'open' requests to try and continue to download
-    for(let r of p.values()){
-      if(r.o && !r.i && !r.overThreshold){
-        if(cb.checked&&(vdld||adld)){cngSvr();await Rw();Z(r.u,r.q,!!0,r.b,r.method,null)}
-        else{vdld=!!0;adld=!!0;
-          let e=l('button'),ee=l('button');
-          e.innerText='Play Partial?';
-          e.style.margin='4px';
-          e.onclick=a=>{vdld=!!1;W(sd,'');handleEndOfStream(r.q)};
-          J(sd,e);
-          ee.innerText='Continue Downloading?';
-          ee.onclick=async a=>{await Rw();W(sd,`<h2>Continuing from ${r.b} of ${r.tl}</h2>`);Z(r.u,r.q,!!0,r.b,r.method,null)};
-          J(sd,ee);
+r.bitrate = (trackBitrate || avgByteRate * 8) || 5000000;
+const mbToSec = mb => mb * 1024 * 1024 / effectiveByteRate;
+  
+ const targetSegDur = 2; // seconds per segment
+  
+ const nbPerTrack = info.tracks.map(track => {
+  const durSec = track.duration / track.timescale;
+  const sps = durSec > 0 ? track.nb_samples / durSec : 30;
+  return Math.max(4, Math.min(120, Math.round(sps * targetSegDur)));
+});
+  if (S.options.useSmartDefaults) {
+    r.smartBuffer = {
+      maxAheadTime: Math.max(300, Math.floor(mbToSec(S.options.maxBufferMemoryMB || 150))),
+      bufferTarget: Math.floor(mbToSec(S.options.bufferMemoryTargetMB || 60)),
+      cleanupBehind: Math.max(15, Math.floor(duration * 0.05)),
+      bitrate: r.bitrate,// avgBitrate,
+  //    avgBps
+    };
+   if (S.options.useSmartDefaults && r.smartBuffer) {
+  const mediaDiv = S.domCache.get(r.id);
+  if (mediaDiv && mediaDiv.infoBox) {
+    mediaDiv.infoBox.classList.add('show-smart');
+  }
+}
+    r.maxAheadTime = r.smartBuffer.maxAheadTime;
+    r.bufferTarget = r.smartBuffer.bufferTarget;
+  } else {
+    r.maxAheadTime = S.options.maxBufferAhead || 180;
+    r.bufferTarget = S.options.bufferTarget || 90;
+  }
+  U(`📽 Video Ready. Starting to Buffer.🎉`, 'toast');
+//  $('.media-info-box').classList.add('show');
+  /*U(`BufT: ${r.bufferTarget}s / ${r.maxAheadTime}s | ${(r.totalBytes / 1048576).toFixed(0)}MB | bps: ${avgBps.toFixed(0)}`,
+    'toast');*/
+
+  const nbSamp = S.options.nbSamples || 20;
+ let ind=0;
+  info.tracks.forEach((track) => {
+    const mime = `${track.type}/mp4;codecs="${track.codec}"`;
+    if (MediaSource.isTypeSupported(mime)) {
+      try {
+        const sb = r.ms.addSourceBuffer(mime);
+        sb.id = track.id;
+        sb.pendingAppends = [];
+        r.mp4boxFile.setSegmentOptions(track.id, sb, {
+          nbSamples: S.options.useSmartDefaults ? Math.floor(nbPerTrack[0] *0.75) : nbSamp,
+          rapAlignment: true
+        });
+        sb.addEventListener('error', e => handleSourceBufferError(r, sb, e));
+        sb.addEventListener('updateend', () => onUpdateEnd.call(sb, r));
+      } catch (e) {
+        U(`SB error: ${e.message}`);
+      }ind++;
+    }
+  });
+ind=null;
+  if (!r.initSegs) r.initSegs = r.mp4boxFile.initializeSegmentation('per-track');
+  r.initSegs.forEach(seg => {
+    const sb = seg.user;
+    try { sb.appendBuffer(seg.buffer); }
+    catch (e) { U(`Init seg error: ${e.message || e}`); }
+  });
+
+  r.mp4boxFile.start();
+};
+    
+     r.mp4boxFile.onSegment=(id,sb,buffer,sampleNum,is_last)=> {
+     if(r.isRecovering)return;
+     sb.pendingAppends.push({buffer,sampleNum,is_last});
+       if(!sb.updating)onUpdateEnd.call(sb,r);
+     };
+
+    if(r.pendingMP4Chunks?.length){
+     if(!r.mp4Queue)r.mp4Queue=[];
+     r.pendingMP4Chunks.forEach(chunk => r.mp4Queue.push(chunk));
+     r.pendingMP4Chunks=null;
+     if(!r.mp4Processing)processMP4Queue(r);
+    }
+   }catch(e){
+     U(`MSE init error: ${e.message}`);
+   }
+  });
+  r.ms.addEventListener('error',e=>{
+   handleMediaSourceError(r,e);
+ });
+ r.isMSESetUp=true;
+}
+
+function onUpdateEnd(r) {
+  const sb = this;
+   if(r.isRecovering)return;
+  if (sb.sampleNum !== undefined) {
+    r.mp4boxFile.releaseUsedSamples(sb.id, sb.sampleNum);
+    delete sb.sampleNum;
+  }
+  if (sb.is_last) {
+    let allDone = true;
+    for (let i = 0; i < r.ms.sourceBuffers.length; i++) {
+      const b = r.ms.sourceBuffers[i];
+      if (b.updating || b.pendingAppends?.length > 0) { allDone = false; break; }
+    }
+    if (allDone && r.ms.readyState === 'open' && r.eosSent) {
+      try { r.ms.endOfStream(); } catch (_) {}
+    }
+  }
+  if (r.ms.readyState === 'open' && !sb.updating && sb.pendingAppends?.length > 0) {
+    const obj = sb.pendingAppends.shift();
+    sb.sampleNum = obj.sampleNum;
+    sb.is_last = obj.is_last;
+    try {
+      sb.appendBuffer(obj.buffer); 
+    } catch (e) {
+      // Do NOT silently requeue. Handle it.
+      sb.pendingAppends.unshift(obj);
+      handleSourceBufferError(r, sb, e);
+    }
+  }
+}
+     
+window.closeMediaWS=()=>{
+  const S = window.AppState;
+  const ws = S.wsMedia;
+  if (!ws) return;
+  try { ws.onclose = ws.onerror = ws.onopen = ws.onmessage = null; ws.close(); } catch (_) {}
+  S.wsMedia = null;
+  S.isMediaConnected = false;
+  updateConnectionIndicator();
+}
+
+window.stopMSEStream = (r, reason) => {
+  if (r.fatalError) return;
+  r.fatalError = true;
+  r.dlPaused = true;
+  r.mseAction = 'Stopped: ' + reason;
+  r._chunkPending = false;
+  r._chunkDone = false;
+  if (r.mp4boxFile) { try { r.mp4boxFile.stop(); } catch (_) {} }
+  if (r.ms?.readyState === 'open') { try { r.ms.endOfStream(); } catch (_) {} }
+  if (r.videoEl && !r.videoEl.paused) r.videoEl.pause();
+
+  closeMediaWS();
+
+  U('Media playback error: ' + reason, 'toast');
+
+  window.AppState.domCache.forEach(div => {
+    if (div.requestId === r.id) updateMSEInfoBox(div);
+  });
+};
+
+async function seekMSE(r, seekTime) {
+  if (r.isRecovering) return;
+  r.isRecovering = true;
+  r.dlPaused = false;
+
+  U(`Seeking to ${fmtTime(seekTime)}…`);
+
+  // 1. Properly close and nullify media WS
+  const deadWs = AppState.wsMedia;
+  if (deadWs && deadWs.readyState === WebSocket.OPEN) {
+    deadWs.onclose = deadWs.onerror = deadWs.onmessage = deadWs.onopen = null;
+    deadWs.close();
+    AppState.wsMedia = null;
+    AppState.isMediaConnected = false;
+    updateConnectionIndicator();
+  }
+
+  // 2. Reset accumulators and MSE state
+  r.chunkAcc = [];
+  r.accSize = 0;
+  r.pendingMP4Chunks = [];
+  r.mp4Queue=[];
+  r.mp4Processing=false;
+  r.eosSent = false; 
+  r.lastActivity = Date.now();
+  r.lastDataAt=Date.now();
+  // 3. Ask mp4box for seek info
+  const seekInfo = r.mp4boxFile.seek(seekTime, true);
+ r.nextFileStart=seekInfo.offset;
+ r.expectedOffset=seekInfo.offset;
+  // 4. Clear buffers with proper awaiting
+ 
+if (r.ms && r.ms.readyState === 'open') {
+  await Promise.all(
+    Array.from(r.ms.sourceBuffers).map(sb => 
+      new Promise(resolve => {
+        sb.pendingAppends = [];
+        const finishAbort = () => {
+          if (sb.updating) {
+            requestAnimationFrame(finishAbort);
+          } else {
+            // Now safe to remove all buffered ranges
+            if (sb.buffered.length) {
+              const onRemoveEnd = () => {
+                sb.removeEventListener('updateend', onRemoveEnd);
+                resolve();
+              };
+              sb.addEventListener('updateend', onRemoveEnd);
+              try { sb.remove(0, Number.MAX_SAFE_INTEGER); }
+              catch(_) { resolve(); }
+            } else {
+              resolve();
+            }
+          }
+        };
+        if (sb.updating) {
+          try { sb.abort(); } catch(_) {}
+        }
+        finishAbort();
+      })
+    )
+  );
+}
+
+ //4.1 reappend initSegs. Removed from abort() I believe. flush??
+  try { r.mp4boxFile.flush(); } catch (_) {}  
+  reInitSegs(r);
+
+  // 5. Update fetch state
+  r.bytesReceived = seekInfo.offset;
+  r._chunkPending = false;
+  r._chunkDone = false;
+  // 6. RECONNECT
+  try {
+     await rotateServer({
+      url: r.url,
+      id: r.id,
+      bytesReceived: r.bytesReceived,
+      method: r.method,
+      socketType: 'media'
+     }, 'media');
+    // wait for WS to be fully ready before considering recovery done
+    await waitWhile(null, () => !AppState.isMediaConnected || !AppState.wsMedia || AppState.wsMedia.readyState !== WebSocket.OPEN,100
+    ).then(()=>{r.isRecovering=false}).catch(()=>{r.isRecovering=false});
+  } catch (e) {
+    U(`Media WS reconnect failed: ${e.message}`);
+    throw e;
+  } 
+
+  // 7. Mark recovery complete ONLY after WS is stable
+   r.isRecovering=false;
+  U('Media WS recovered and stable');
+}
+
+  window.revokeRequest = id => {
+    const S = window.AppState;
+    const r = S.requests.get(id);
+   if(!r)return;
+    if(!r.hold){
+     if(r.objectUrl)URL.revokeObjectURL(r.objectUrl);
+     S.requests.delete(id);
+    }
+  };
+})();
+
+//## Section 4: Media Player & jsmediatags & image & vids. Hell yeah
+
+(function initMedia() {
+  const S = window.AppState;
+  let audioPlayer = null;
+ $('#scrubBack').onclick=()=>seekAudio(-10);
+ $('#scrubForward').onclick=()=>seekAudio(10);
+  // jsmediatags wrapper
+  window.parseMediaTags = r => {
+    return new Promise((resolve) => {
+      if (!window.jsmediatags) {
+        resolve({title: r.linkText || getFileName(r.url), artist: 'Unknown', album: 'Unknown'});
+        return;
+      }
+      
+      window.jsmediatags.read(r.blob, {
+        onSuccess: tag => {
+          const tags = tag.tags;
+          resolve({
+            title: tags.title || r.linkText || getFileName(r.url),
+            artist: tags.artist || 'Unknown',
+            album: tags.album || 'Unknown',
+            picture: tags.picture
+          });
+        },
+        onError: () => {
+          resolve({title: r.linkText || getFileName(r.url), artist: 'Unknown', album: 'Unknown'});
+        } 
+      });
+    });
+  };
+
+  window.handleAudio = async r => {
+    if (!audioPlayer) initAudioPlayer();
+    
+    const tags = await parseMediaTags(r);
+    const trackInfo = {
+      data: r,
+      url: r.objectUrl,
+      title: tags.title,
+      artist: tags.artist,
+      album: tags.album,
+      removeAfter: false
+    };
+    
+    S.playlist.push(trackInfo);
+    renderPlaylist();
+    
+    if (S.playlist.length === 1) {
+      playTrack(0);
+      $('#icon').style.display = 'inline-block';
+    } else {
+      U(`Added ${trackInfo.title ? trackInfo.title : ''} to playlist`);
+      setTimeout(() => fade($('#pg')), 1000);
+    }
+    
+    r.hold = true;
+  };
+ function updateMediaIndex() {
+ 
+   const S = window.AppState;
+   clearTimeout(S.mediaTimeout);
+   const idx = S.currentMediaIndex  +1;
+   const total = S.mediaKeys.length;
+    $('#media-index-num').textContent=idx;
+    $('#media-index-total').textContent=total;
+     $('#media-index').style.opacity=1;
+    S.mediaTimeout= setTimeout(()=>$('#media-index').style.opacity=0,3000);
+  }
+
+ function updatePDFControls() {
+   const r=S.requests.get(S.mediaKeys[S.currentMediaIndex]);
+   const nav=$('#pdf-nav');
+   const pdfNumPages=$('#pdf-num-pages');
+   clearTimeout(S.pdfTimer);
+ 
+  if(!r?.isPDF) {
+     nav.style.opacity='0';
+     nav.style.pointerEvents='none';
+     return;
+   }
+   pdfNumPages.textContent=r.pdfNumPages || 1;
+   nav.style.opacity='1';
+    nav.style.pointerEvents='auto';
+
+   const pageInput = $('#pdf-page-inp');
+     pageInput.value=r.pageNum || 1;
+   pageInput.max=r.pdfDoc?.numPages || 1;
+   pageInput.min=1;
+
+   S.pdfTimer=setTimeout(()=>{
+    if(document.activeElement!==pageInput) {
+      nav.style.opacity='0';
+      nav.style.pointerEvents='none';
+    }
+   }, 5000);
+   }
+
+  $('#pdf-page-inp').onfocus=()=>{clearTimeout(S.pdfTimer);$('#pdf-nav').style.pointerEvents='auto'};
+
+  $('#pdf-page-inp').onblur=()=>{
+   S.pdfTimer=setTimeout(()=>{
+     const nav=$('#pdf-nav')   
+    if(!nav.contains(document.activeElement)){
+     nav.style.opacity='0';
+      nav.style.pointerEvents='none';
+    }
+    },1000);
+  };
+   $('#pdf-page-inp').onkeydown=e=>{if(e.key==='Enter') goToPDFPage()}
+
+  function goToPDFPage() {
+   if(!S.mediaKeys.length)return;
+
+   const r=S.requests.get(S.mediaKeys[S.currentMediaIndex]);
+   if(!r.pdfDoc) return;
+
+   const page = parseInt($('#pdf-page-inp').value,10);
+
+   if(page >= 1 && page <= r.pdfDoc.numPages) {
+    r.pageNum=page;
+    r.renderPage(page);
+    $('#pdf-page-inp').blur();
+    updatePDFControls();
+   }
+  }
+  // --- PDF bookmark helpers (KV-backed) ---
+function getPDFBookmarkKey(r) {
+  if (!r || !r.url) return null;
+  try {
+    const u = new URL(r.url.href);
+    u.hash = '';
+    return u.href;
+  } catch (e) {
+    return r.url.href || null;
+  }
+}
+ async function pdfKVOp(op, key, value = null, timeout = 15000) {
+  const S = window.AppState;
+  const opUp = op.toUpperCase();
+  let lastErr;
+
+  // Try a few servers; start from current index but rotate on failure
+  const startIdx = S.serverIndex || 0;
+  for (let offset = 0; offset < 6; offset++) {
+    const server = servers[(startIdx + offset) % servers.length];
+    try {
+      const res = await new Promise((resolve, reject) => {
+        let ws, timer, done = false;
+        const cleanup = () => {
+          clearTimeout(timer);
+          try { ws.close(); } catch (_) {}
+        };
+        const finish = (val, err) => {
+          if (done) return;
+          done = true;
+          cleanup();
+          err ? reject(err) : resolve(val);
+        };
+
+        ws = new WebSocket(`wss://${server}.paytel.workers.dev`);
+ //       ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+          let u = `CMD_KV_${opUp}?key=${encodeURIComponent(key)}`;
+          if (value !== null) u += `&val=${encodeURIComponent(value)}`;
+          ws.send(JSON.stringify({ u, au: getAuth(),admin: true }));
+          // For PUT, still wait for server ack before resolving
+        };
+        ws.onmessage = m => {
+          try {
+            const data = JSON.parse(m.data);
+            finish(data.d ?? data);
+          } catch (e) {
+            finish(null, e);
+          }
+        };
+        ws.onerror = () => finish(null, new Error('kv ws error'));
+        ws.onclose = () => { if (!done) finish(null, new Error('kv ws closed')); };
+        timer = setTimeout(() => finish(null, new Error('kv timeout')), timeout);
+      });
+      return res;
+    } catch (e) {
+      lastErr = e;
+      // continue to next server
+    }
+  }
+  throw lastErr || new Error('pdfKVOp failed on all tried servers');
+}
+
+window.loadPDFBookmarks = async () => {
+  try {
+    const raw = await pdfKVOp('GET', 'pdfBookmarks');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+};
+
+window.savePDFBookmark = (r, pageNum) => {
+  if (!r || !r.url || !r.pdfDoc) return;
+  const p = pageNum || r.pageNum;
+  if (!p || p < 1) return;
+  const key = getPDFBookmarkKey(r);
+  if (!key) return;
+
+  // Cancel any in-flight save for a previous page
+  if (r._bookmarkSaveTimer) clearTimeout(r._bookmarkSaveTimer);
+
+  r._pendingBookmarkPage = p;
+
+  r._bookmarkSaveTimer = setTimeout(() => {
+    flushPDFBookmark(r);
+  }, 4000); // 4 s idle before saving
+};
+
+window.flushPDFBookmark = async (r) => {
+  if (!r || !r.url || !r._pendingBookmarkPage) return;
+  const p = r._pendingBookmarkPage;
+  const key = getPDFBookmarkKey(r);
+  if (!key) return;
+
+  try {
+    const all = await loadPDFBookmarks();
+    const existing = all[key];
+
+    // Don't hammer KV if the same page was already saved recently
+    if (existing && existing.page === p /*&& Date.now() - existing.updated < 30000*/) {
+      r._pendingBookmarkPage = null;
+      return;
+    }
+
+    all[key] = { page: p, updated: Date.now() };
+    await pdfKVOp('PUT', 'pdfBookmarks', JSON.stringify(all));
+    U(`PDF bookmark saved: page ${p}`, 'toast');
+  } catch (e) {
+    U(`Bookmark save failed: ${e.message || e}`, 'toast');
+  } finally {
+    r._pendingBookmarkPage = null;
+  }
+};
+
+window.deletePDFBookmark = async (r) => {
+  if (!r || !r.url) return;
+  const key = getPDFBookmarkKey(r);
+  if (!key) return;
+    if (r._bookmarkSaveTimer) clearTimeout(r._bookmarkSaveTimer);
+  r._pendingBookmarkPage = null;
+
+  try {
+    const all = await loadPDFBookmarks();
+    if (!all[key]) {
+      U('No bookmark for this PDF', 'toast');
+      return;
+    }
+    delete all[key];
+    await pdfKVOp('PUT', 'pdfBookmarks', JSON.stringify(all));
+    U('PDF bookmark deleted', 'toast');
+  } catch (e) {
+    U(`Bookmark delete failed: ${e.message || e}`, 'toast');
+  }
+};
+
+window.applyPDFBookmark = async (r) => {
+  if (!r || !r.url) return;
+  const key = getPDFBookmarkKey(r);
+  if (!key) return;
+  try {
+    const all = await loadPDFBookmarks();
+    const entry = all[key];
+    if (entry && entry.page && entry.page > 1 && entry.page <= (r.pdfNumPages || 1)) {
+      r.pageNum = entry.page;
+      r.renderPage(entry.page);
+      U(`Resumed PDF on page ${entry.page}`, 'toast');
+    } else if (!entry) {
+      // First time seeing this PDF; seed a page-1 bookmark quietly
+      savePDFBookmark(r, 1);
+    }
+  } catch (_) {
+    // Silent fail: still render page 1
+  }
+};
+
+// Delete bookmark button handler
+$('#pdf-bookmark-del').onclick = () => {
+  if (!S.mediaKeys.length) return;
+  const r = S.requests.get(S.mediaKeys[S.currentMediaIndex]);
+  if (r && r.isPDF) deletePDFBookmark(r);
+};
+    function initAudioPlayer() {
+   if(!S.sliderInitialized) {
+    audioPlayer = el('audio');
+    audioPlayer.controls = false;
+    
+    $('#btn-play').onclick = togglePlay;
+    $('#btn-next').onclick = () => nextTrack();
+    $('#btn-prev').onclick = () => prevTrack();
+    $('#btn-next').ondblclick = e => { e.stopPropagation(); seekAudio(10); };
+    $('#btn-prev').ondblclick = e => { e.stopPropagation(); seekAudio(-10); };
+    $('#btn-close-player').onclick = closePlayer;
+    $('#icon').onclick = togglePlayerVisibility;
+    $('#trackTimeDetail').onclick = toggleSeekSlider;
+    
+    // Long press for seek slider
+    let pressTimer;
+    $('#trackTimeDetail').addEventListener('touchstart', e => {
+      pressTimer = setTimeout(() => showSeekSlider(), 500);
+    });
+    $('#trackTimeDetail').addEventListener('touchend', () => {
+      clearTimeout(pressTimer);
+    });
+    $('#trackTimeDetail').addEventListener('touchmove', () => {
+      clearTimeout(pressTimer);
+    });
+    
+    audioPlayer.addEventListener('ended', () => {
+      const idx = parseInt(audioPlayer.dataset.index);
+      if (S.playlist[idx]?.removeAfter) {
+        S.playlist.splice(idx, 1);
+        renderPlaylist();
+      }
+      nextTrack();
+    });
+    
+    audioPlayer.addEventListener('timeupdate', () => {
+      $('#trackTimeDetail').textContent = `${fmtTime(audioPlayer.currentTime)} / ${fmtTime(audioPlayer.duration)}`;
+      if (S.sliderActive && !S.sliderDragging) updateSlider();
+    });
+   S.sliderInitialized=true;
+   }
+  }
+ window.adjustAudioRate=(value=null)=>{
+   if(!audioPlayer)return;
+
+  if(value){ audioPlayer.playbackRate=value;return;}
+  audioPlayer.playbackRate+=0.25;
+  if(audioPlayer.playbackRate>2.0)audioPlayer.playbackRate=1.0;
+  U(`Playback Speed: ${audioPlayer.playbackRate}`);
+  setTimeout(()=>fade($('#pg')),2000);
+ };
+
+  function togglePlay() {
+    if (audioPlayer.paused) {
+      audioPlayer.play();
+      $('#btn-play').textContent = '⏸';
+    } else {
+      audioPlayer.pause();
+      $('#btn-play').textContent = '▶';
+    }
+  }
+
+  function seekAudio(secs) {
+    audioPlayer.currentTime = Math.max(0, Math.min(audioPlayer.currentTime + secs, audioPlayer.duration || 0));
+  }
+
+  function nextTrack() {
+    if (!S.playlist.length) return;
+    let idx = parseInt(audioPlayer.dataset.index || 0) + 1;
+    if (idx >= S.playlist.length) idx = 0;
+    playTrack(idx);
+  }
+
+  function prevTrack() {
+    if (!S.playlist.length) return;
+    let idx = parseInt(audioPlayer.dataset.index || 0) - 1;
+    if (idx < 0) idx = S.playlist.length - 1;
+    playTrack(idx);
+  }
+
+  function playTrack(idx) {
+    const track = S.playlist[idx];
+    audioPlayer.src = track.url;
+    audioPlayer.dataset.index = idx;
+    audioPlayer.play();
+    $('#btn-play').textContent = '⏸';
+    $('#marqueeContent').textContent = `${track.title} - ${track.artist} ${track.album.toLowerCase()==='unknown' ? '' : '('+track.album+')'}`;
+    $('#aud-wrapper').classList.add('is-visible');
+    $('#aud-wrapper').style.display = 'flex';
+    renderPlaylist();
+    U(`Playing: ${track.title} - ${track.artist}`);
+    setTimeout(() => fade($('#pg')), 2000);
+  }
+
+  function closePlayer() {
+    audioPlayer.pause();
+    audioPlayer.removeAttribute('src');
+    S.playlist.forEach(t => revokeRequest(t.data.id));
+    S.playlist = [];
+    const wrap =$('#aud-wrapper');
+    wrap.classList.remove('is-visible');
+    setTimeout(()=>{wrap.style.display='none'},500);
+    $('#icon').style.display = 'none';
+    renderPlaylist();
+  }
+
+  window.togglePlayerVisibility = () => {
+    const wrap = $('#aud-wrapper');
+    if (wrap.style.display === 'none' || !wrap.style.display) {
+      wrap.style.display = 'flex';
+      void wrap.offsetWidth;//force reflow
+      wrap.classList.add('is-visible');
+    } else {
+      wrap.classList.remove('is-visible');
+      setTimeout(() => wrap.style.display = 'none', 500);
+    }
+  };
+
+  // Seek Slider
+  function showSeekSlider() {
+    S.sliderActive = true;
+    $('#seekSliderContainer').classList.add('active');
+    updateSlider();
+  }
+
+  window.hideSeekSlider = () => {
+    S.sliderActive = false;
+    S.sliderDragging = false;
+    $('#seekSliderContainer').classList.remove('active');
+  };
+
+  function updateSlider() {
+    if (!audioPlayer.duration) return;
+    const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+    $('#sliderFill').style.width = `${pct}%`;
+    $('#sliderHandle').style.left = `${pct}%`;
+    $('#sliderTime').textContent = fmtTime(audioPlayer.currentTime);
+    $('#sliderDuration').textContent = fmtTime(audioPlayer.duration);
+  }
+
+  function toggleSeekSlider() {
+    if ($('#seekSliderContainer').classList.contains('active')) {
+      hideSeekSlider();
+    } else {
+      showSeekSlider();
+    }
+  }
+
+  // Slider drag handling
+  $('#sliderTrack').addEventListener('touchstart', e => {
+    S.sliderDragging = true;
+    handleSliderMove(e.touches[0]);
+  });
+  
+  document.addEventListener('touchmove', e => {
+    if (S.sliderDragging) handleSliderMove(e.touches[0]);
+  }, {passive: false});
+
+  document.addEventListener('touchend', () => S.sliderDragging = false);
+  
+  function handleSliderMove(pos) {
+    const rect = $('#sliderTrack').getBoundingClientRect();
+    const pct = Math.max(0, Math.min((pos.clientX - rect.left) / rect.width, 1));
+    $('#sliderFill').style.width = `${pct*100}%`;
+    $('#sliderHandle').style.left = `${pct*100}%`;
+    if (audioPlayer.duration) {
+      audioPlayer.currentTime = pct * audioPlayer.duration;
+      $('#sliderTime').textContent = fmtTime(audioPlayer.currentTime);
+    }
+  }
+
+  // Playlist UI
+  window.renderPlaylist = () => {
+    const cont = $('#sidebar-playlist');
+    if (!S.playlist.length) {
+      cont.innerHTML = '<p style="padding:10px;color:#ccc">No music added</p>';
+      return;
+    }
+    
+    const curIdx = parseInt(audioPlayer?.dataset.index || -1);
+    let html = '<ul class="col" style="list-style:none;padding-left:0">';
+    
+    S.playlist.forEach((track, i) => {
+      const isPlaying = i === curIdx;
+      html += `
+        <li class="playlist-item ${isPlaying ? 'playing' : ''}" data-index="${i}" style="display:flex;align-items:center;gap:4px;padding:4px 2px;cursor:pointer">
+          <span class="drag-handle" style="cursor:grab">⋮⋮ <span class="track-num">${i+1}.</span></span>
+          <div style="flex:1;overflow:hidden;position:relative;height:18px">
+            <div class="marquee-content" style="${isPlaying ? 'animation:marqueeScroll 18s linear infinite;padding-left:100%' : ''}">${escapeHtml(track.title + (track.artist !== 'Unknown' ? ' - ' + track.artist : '') + (track.album!=='Unknown' ? ' (' + track.album + ')' : ''))}</div>
+          </div>
+          <label class="custom-cb" style="transform:scale(0.8)">
+            <input type="checkbox" class="remove-after" ${track.removeAfter ? 'checked' : ''} onchange="window.AppState.playlist[${i}].removeAfter=this.checked">
+            <span class="checkmark"></span>
+          </label>
+          <span class="remove-btn" style="color:#f88;cursor:pointer;margin-left:-10px" onclick="event.stopPropagation();removeTrack(${i})">✖</span>
+        </li>
+      `;
+    });
+    html += '</ul>';
+    cont.innerHTML = html;
+    
+    $$('.playlist-item', cont).forEach(li => {
+      li.onclick = e => {
+        if (e.target.closest('.remove-btn') || e.target.closest('.custom-cb')) return;
+        playTrack(parseInt(li.dataset.index));
+        switchTab('music');
+      };
+    });
+  };
+
+  window.removeTrack = idx => {
+    const curIdx = parseInt(audioPlayer?.dataset.index || -1);
+    S.playlist.splice(idx, 1);
+    if (curIdx === idx) {
+      if (S.playlist.length) playTrack(idx >= S.playlist.length ? 0 : idx);
+      else closePlayer();
+    } else if (curIdx > idx) {
+      audioPlayer.dataset.index = curIdx - 1;
+    }
+    renderPlaylist();
+  };
+
+  // Video/Image Handling
+  window.handleVideo = r => {
+    U('Loading video...');
+    r.hold = true;
+    const vid = el('video');
+    vid.src = r.objectUrl;
+    vid.controls = true;
+    vid.style.width = '100%';
+    vid.style.height = '100%';
+    vid.style.objectFit = 'contain';
+    addMediaCard(r.id, vid);
+    togglePLDiv();
+    S.videoDownloading = false;
+   U('Loading video...done!');
+    setTimeout(()=>fade($('#pg')),2000);
+  };
+
+  window.handleImage = r => {
+   const  S = window.AppState;
+   const  targetTab = S.tabs.find(t=>t.id===r.tabId);
+   if(!targetTab) {//tab closed
+    revokeRequest(r.id)
+    return;
+   }
+
+   const  isActive = (S.activeTabId === r.tabId);
+   const container = isActive ? $('#ct').shadowRoot : targetTab.fragment;
+
+    if(r.id==='123456789'){//for demo image
+      const img=el('img');
+      img.src = r.objectUrl;
+      container.appendChild(img);
+      S.firstLoad = false;
+    } else {
+       if(r.isLink) {
+       const img = el('img');
+        img.src = r.objectUrl;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.objectFit = 'contain';
+        addMediaCard(r.id, img);
+       U('Image loaded');
+        togglePLDiv();
+        setTimeout(()=>fade($('#pg')),1000);
+       }else {
+        const imgEl = container.querySelector(`img[data-pq="${r.id}"]`);
+        if(imgEl){
+             imgEl.classList.remove('img-placeholder');
+
+    // If the batch loader is already listening, just set src and let it finish.
+    // Otherwise (user clicked a single image link), set up my own cleanup.
+    if (imgEl.dataset.loading !== 'true') {
+      imgEl.onload = () => {
+        imgEl.classList.remove('img-placeholder');
+        imgEl.dataset.loaded = 'true';
+        revokeRequest(r.id);
+      };
+      imgEl.onerror = () => {
+        imgEl.classList.add('img-error');
+      };
+    }
+    imgEl.src = r.objectUrl;
+       }else {
+         if(S.downloadingImages && !r.isLink){
+          S.pendingImages = Math.max(0,S.pendingImages-1);
+         }
+        revokeRequest(r.id);
+       }
+      }
+    }   
+   if(isActive)setTimeout(()=>fade($('#pg')),2000);
+
+  };
+     
+window.addMediaCard = (id, mediaEl, noAnim) => {
+  if (S.domCache.has(id)) return;
+  const div = el('div');
+  div.className = 'media-content active';
+  div.id = `media-${id}`;
+   
+  const infoBox = el('div');
+  infoBox.id='infoBox';
+  infoBox.className = 'media-info-box';
+  infoBox.innerHTML = `
+      <div class="detail status-row"><label>Status: </label><span class="value status">-</span></div>
+  <div class="detail action-row"><label>Action: </label><span class="value action">Waiting</span></div>
+  <div class="time-row"><label>Time: </label><span class="value time">0:00 / 0:00</span></div>
+  <div class="bytes-row"><label>Bytes: </label><span class="value bytes">0 MB / 0 MB</span></div>
+  <div class="buffer-row"><label>Buffer: </label><span class="value buffer">0s</span></div>
+  <div class="detail smart-only min-row"><label>Min Buffer: </label><span class="value min">-</span></div>
+  <div class="detail smart-only target-row"><label>Target Buffer: </label><span class="value target">-</span></div>
+  <div class="detail mse-minute-seek">
+    <input type="number" min="0" placeholder="min" id="mse-seek-min-${id}" onkeydown="if(event.key==='Enter')seekMSEToMinute('${id}')">
+    <button onclick="seekMSEToMinute('${id}')">Seek</button>
+  </div> 
+`;
+
+  // Store reference for updates
+  div.infoBox = infoBox;
+  div.mediaEl = mediaEl;
+  div.requestId = id;
+  
+  const toggleInfo = (e) => {
+  if (e.target.closest('.mse-minute-seek')) return;
+
+  const req = window.AppState.requests.get(id);
+  if (!req || !req.usesMSE) {
+    infoBox.classList.remove('show', 'expanded');
+    return;
+  }
+
+    if (infoBox.classList.contains('expanded')) {
+    infoBox.classList.remove('expanded');            // expanded -> mini
+  } else if (infoBox.classList.contains('show')) {
+    infoBox.classList.remove('show');                // mini -> hidden
+  } else {
+    infoBox.classList.add('show', 'expanded');       // hidden -> expanded
+  }
+};
+
+const showNav = (e) => {
+  if (e.target.closest('.mse-minute-seek')) return;
+  $$('.md-nav,.media-close-btn').forEach(b => {
+    b.classList.add('show');
+    setTimeout(() => b.classList.remove('show'), 3000);
+  });
+  updateMediaIndex();
+  updatePDFControls();
+};
+
+div.ontouchstart  = (e) => { showNav(e); toggleInfo(e); e.stopPropagation(); };
+mediaEl.ontouchstart = (e) => { showNav(e); toggleInfo(e); e.stopPropagation(); };
+ 
+  const btn = el('button');
+  btn.className = 'media-close-btn';
+  btn.textContent = 'X';
+  btn.onclick = () => { try{closeMedia(id);}catch(e){U(e)}}
+  
+  div.appendChild(mediaEl);
+  div.appendChild(btn);
+  div.appendChild(infoBox); // Add info box
+  
+  $('#pl').appendChild(div);
+  S.domCache.set(id, div);
+  S.mediaKeys.push(id);
+  S.currentMediaIndex = S.mediaKeys.length - 1;
+  updateMediaIndex();
+  S.domCache.forEach((el, key) => {
+    if (key !== id) el.classList.remove('active');
+  });
+};
+
+window.seekMSEToMinute = (id) => {
+  const r = S.requests.get(id);
+  if (!r || !r.videoEl) return;
+  const input = document.getElementById(`mse-seek-min-${id}`);
+  const minutes = parseInt(input.value, 10);
+  if (isNaN(minutes) || minutes < 0) return;
+  r.videoEl.currentTime = minutes * 60;
+  input.value='';
+};
+   
+   window.updateMSEInfoBox = (mediaDiv) => {
+  if (!mediaDiv || !mediaDiv.infoBox || !mediaDiv.requestId) return;
+  const S=window.AppState;
+  const r = S.requests.get(mediaDiv.requestId);
+  if (!r || !r.usesMSE || !r.videoEl) return;
+  
+  const infoBox = mediaDiv.infoBox;
+  const vid = r.videoEl;
+  
+  // --- Status ---
+  
+const statusText = r.fatalError ? 'STOPPED'
+  : (r.dlPaused ? 'PAUSED' : (r.isRecovering ? 'PROCESSING' : 'DOWNLOADING'));
+
+ infoBox.querySelector('.status').textContent = statusText;
+  
+  // --- Action ---
+  let action = r.mseAction || 'Waiting';
+  if (r.dlPaused) action = 'Paused';
+  if (r.isRecovering) action = 'Recovering';
+  infoBox.querySelector('.action').textContent = action;
+  
+  // --- Time: current / total ---
+  const currentTime = vid.currentTime || 0;
+  const totalTime =(r.ms && r.ms.duration) || vid.duration || 0;
+  infoBox.querySelector('.time').textContent = 
+    `${fmtTime(currentTime)} / ${fmtTime(totalTime)}`;
+  
+  // --- Byte Mark: current / total (auto MB / GB) ---
+  const bytesCurrent = r.bytesReceived || 0;
+  const bytesTotal   = r.totalBytes || 0;
+  
+  const fmtBytes = (b) => {
+    if (!b) return '0 MB';
+ /*   return b >= 1073741824 
+      ? `${(b / 1073741824).toFixed(2)} GB` 
+      : `${(b / 1048576).toFixed(2)} MB`;*/
+    return `${(b / 1048576).toFixed(2)} MB`;
+  };
+  
+  infoBox.querySelector('.bytes').textContent = bytesTotal > 0
+    ? `${fmtBytes(bytesCurrent)} / ${fmtBytes(bytesTotal)}`
+    : `${fmtBytes(bytesCurrent)} / --`;
+  
+  infoBox.querySelector('.buffer').textContent = `${r.bufferedAhead.toFixed(0) ?? S.bufferedAhead.toFixed(0)}s`;
+  const minEl = infoBox.querySelector('.value.min');
+const targetEl = infoBox.querySelector('.value.target');
+if (minEl) {
+  minEl.textContent = (r.smartBuffer ? r.smartBuffer.bufferTarget : S.options.bufferTarget) + 's';
+}
+if (targetEl) {
+  targetEl.textContent = (r.smartBuffer ? r.smartBuffer.maxAheadTime : S.options.maxBufferAhead) + 's';
+}
+  /*const smartTarget = infoBox.querySelector('.value.target');
+const smartMax = infoBox.querySelector('.value.max');
+if (smartTarget) {
+  smartTarget.textContent = (r.smartBuffer ? r.smartBuffer.bufferTarget : (S.options.bufferTarget || 0)) + 's';
+}
+if (smartMax) {
+  smartMax.textContent = (r.smartBuffer ? r.smartBuffer.maxAheadTime : (S.options.maxBufferAhead || 0)) + 's';
+}*/
+  // --- Border color coding ---
+ if (r.fatalError) {
+  infoBox.classList.add('fatal');
+} else {
+  infoBox.classList.remove('fatal');
+  infoBox.style.borderColor = r.dlPaused ? '#55aa55' : '#ffaa00';
+}
+};
+
+  window.closeAllMedia=()=>{
+  const keys=[...S.mediaKeys];
+  for(let i=0;i<keys.length;i++){
+   closeMedia(keys[i]);
+  }
+
+  S.mediaKeys = [];
+  S.domCache.clear();
+  S.currentMediaIndex=-1;
+
+   const pl=$('#pl');
+   pl.style.height='0vh';
+   pl.classList.remove('active');
+
+   updateMediaIndex();
+  };
+
+  window.closeMedia = id => {
+    const idx = S.mediaKeys.indexOf(id);
+    if(idx===-1)return;
+
+    const mediaDiv=S.domCache.get(id);
+    const r=S.requests.get(id);
+     if (r && r.isPDF) flushPDFBookmark(r);
+    // --- 1. DOM teardown ---
+    if(mediaDiv) {
+      const vid = mediaDiv.querySelector('video');
+      if(vid){
+        vid.pause();
+        vid.src = '';
+        vid.load();
+        vid.removeAttribute('src');
+      }
+      mediaDiv.ontouchstart = null;
+      mediaDiv.remove();
+      S.domCache.delete(id);
+    }
+
+    // --- 2. Deep MSE / request cleanup 
+    if(r) {
+      // Stop mp4box parsing
+      if(r.mp4boxFile) {
+        try { r.mp4boxFile.stop(); r.mp4boxFile.flush(); } catch(e){}
+        r.mp4boxFile = null;
+      }
+
+     if (r.objectUrl) { URL.revokeObjectURL(r.objectUrl); r.objectUrl = null; } 
+
+      // Tear down MediaSource + SourceBuffers
+      if(r.ms) {
+        try {
+          if(r.ms.readyState === 'open') {
+            Array.from(r.ms.sourceBuffers).forEach(sb => {
+              try { if(sb.updating) sb.abort(); } catch(e){}
+              try { r.ms.removeSourceBuffer(sb); } catch(e){}
+            });
+            r.ms.endOfStream();
+          }
+        } catch(e){}
+        r.ms = null;
+      }
+
+      // Detach video element from request
+      if(r.videoEl) {
+        r.videoEl.pause();
+        r.videoEl.src = '';
+        r.videoEl.load();
+        r.videoEl = null;
+      }
+
+      // Purge memory buffers
+      r.chunkAcc = [];
+      r.accSize = 0;
+      r.pendingMP4Chunks = [];
+      r.eosSent = false;
+      r.isRecovering = false;
+      r.dlPaused = false;
+      r.mseAction = null;
+
+      // Torrent / PDF cleanup
+      if(r.torrent){ try{ r.torrent.destroy(); } catch(e){} }
+      if(r.pdfDoc){ try{ r.pdfDoc.destroy(); } catch(e){} r.pdfDoc = null; }
+
+      clearInterval(r.bufferCheckInterval);
+    }
+
+    // --- 3. Update carousel state ---
+    S.mediaKeys.splice(idx,1);
+    
+    if(S.mediaKeys.length === 0){
+      S.currentMediaIndex = -1;
+      togglePLDiv();
+    } else if(idx === S.currentMediaIndex){
+      const nextKey = S.mediaKeys[Math.min(idx, S.mediaKeys.length - 1)];
+      S.domCache.get(nextKey)?.classList.add('active');
+      S.currentMediaIndex = Math.min(idx, S.mediaKeys.length - 1);
+    } else if(idx < S.currentMediaIndex){
+      S.currentMediaIndex--;                 // fixed: was being set to -1
+    }
+
+/*   // --- 3.1 Check and stop mseCheckLoop
+   const stillHasMSE = [...S.requests.values()].some(
+     req => req.usesMSE && req.isOpen && !req.fatalError
+   );
+   if (!stillHasMSE) stopMSECheckLoop();*/
+
+    // --- 4. Global download state & WS cleanup ---
+    // Mark closed before we check siblings
+    if(r){
+      r.isOpen = false;
+      r.hold = false;
+    }
+
+    const hasOtherActive = [...S.requests.values()].some(req =>
+      req.id !== id && req.isOpen && (req.isVideo || req.isAudio || req.usesMSE)
+    );
+
+    if(!hasOtherActive){
+      S.videoDownloading = false;
+      S.audioDownloading = false;
+
+      if(S.wsMedia){
+        try{
+          S.wsMedia.onclose = S.wsMedia.onerror = S.wsMedia.onmessage = S.wsMedia.onopen = null;
+          S.wsMedia.close();
+        } catch(e){}
+        S.wsMedia = null;
+        S.isMediaConnected = false;
+        updateConnectionIndicator();
+      }
+    }
+    
+    if(r) revokeRequest(id);
+
+    updateStopButton();   
+    updateMediaIndex();
+    fade($('#pg'));
+    fade($('#pg2'));
+  };
+
+  window.togglePLDiv=() => {
+    const tmp =$('#pl');
+    if(!tmp.classList.contains('active')) {
+      tmp.style.height ='100vh';
+      tmp.classList.add('active'); 
+    } else {
+      if(S.mediaKeys.length)return;
+      tmp.style.height = '0vh';
+      tmp.classList.remove('active');
+    }
+  }
+  
+  $('#prev-media').onclick = () => navigateMedia(-1);
+  $('#next-media').onclick = () => navigateMedia(1);
+  
+  function navigateMedia(dir) {
+    if (!S.mediaKeys.length) return;
+       S.domCache.get(S.mediaKeys[S.currentMediaIndex])?.classList.remove('active');
+    S.currentMediaIndex = (S.currentMediaIndex + dir + S.mediaKeys.length) % S.mediaKeys.length;
+    S.domCache.get(S.mediaKeys[S.currentMediaIndex])?.classList.add('active');
+    updateMediaIndex();
+    updatePDFControls();
+  }
+
+  // PDF Handling
+  window.handlePDF = r => {
+    if (!window.pdfjsLib) {
+      U('PDF.js not loaded');
+      return;
+    }
+    r.hold = true;
+    const canvas = el('canvas');
+   const drkTgl = $('#pdf-dark-toggle');
+   drkTgl.onclick=()=>{
+     const isInverted=canvas.style.filter==='invert(1) hue-rotate(180deg)';
+    canvas.style.filter=isInverted ? 'none' : 'invert(1) hue-rotate(180deg)';
+   drkTgl.textContent = isInverted ? '🌚' : '🌝';
+   };
+    addMediaCard(r.id, canvas);
+    togglePLDiv();
+    const ctx = canvas.getContext('2d');
+
+ /*   pdfjsLib.getDocument(r.objectUrl).promise.then(pdf => {
+      r.pdfDoc = pdf;
+      r.pageNum = 1;
+      r.scale = 1.5;
+      r.pdfNumPages = pdf.numPages;
+
+      const renderPage = num => {
+        pdf.getPage(num).then(page => {
+          const vp = page.getViewport({scale: r.scale});
+          canvas.height = vp.height;
+          canvas.width = vp.width;
+          page.render({canvasContext: ctx, viewport: vp});
+          updatePDFControls();
+          U(`Page ${num} of ${pdf.numPages}`);
+        });
+      };
+      r.renderPage=renderPage;
+    
+      renderPage(1);
+      updatePDFControls();
+
+      canvas.ondblclick = e => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        if (x < rect.width/3 && r.pageNum > 1) renderPage(--r.pageNum);
+        else if (x > rect.width*2/3 && r.pageNum < pdf.numPages) renderPage(++r.pageNum);
+        else if (x >= rect.width/3 && x <= rect.width*2/3) {
+          const y = e.clientY - rect.top;
+          if (y < rect.height/3) r.scale += 0.2;
+          else if (y > rect.height*2/3) r.scale = Math.max(0.3, r.scale - 0.2);
+          else r.scale = 1.5;
+          renderPage(r.pageNum);
+        }
+      };
+      canvas.onclick=e=>{
+       e.stopPropagation();
+        updatePDFControls();
+      }
+    });*/
+
+   pdfjsLib.getDocument(r.objectUrl).promise.then(pdf => {
+  r.pdfDoc = pdf;
+  r.pageNum = 1;
+  r.scale = 1.5;
+  r.pdfNumPages = pdf.numPages;
+
+  const originalRender = num => {
+    pdf.getPage(num).then(page => {
+      const vp = page.getViewport({ scale: r.scale });
+      canvas.height = vp.height;
+      canvas.width = vp.width;
+      page.render({ canvasContext: ctx, viewport: vp });
+      updatePDFControls();
+      U(`Page ${num} of ${pdf.numPages}`);
+    });
+  };
+
+  r.renderPage = num => {
+    originalRender(num);
+    r.pageNum = num;
+    savePDFBookmark(r, num);
+  };
+
+  // Resume saved page, or fall back to page 1
+  applyPDFBookmark(r).then(() => {
+    if (r.pageNum === 1) r.renderPage(1);
+  });
+
+  updatePDFControls();
+
+  canvas.ondblclick = e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x < rect.width / 3 && r.pageNum > 1) r.renderPage(--r.pageNum);
+    else if (x > rect.width * 2 / 3 && r.pageNum < pdf.numPages) r.renderPage(++r.pageNum);
+    else if (x >= rect.width / 3 && x <= rect.width * 2 / 3) {
+      const y = e.clientY - rect.top;
+      if (y < rect.height / 3) r.scale += 0.2;
+      else if (y > rect.height * 2 / 3) r.scale = Math.max(0.3, r.scale - 0.2);
+      else r.scale = 1.5;
+      r.renderPage(r.pageNum);
+    }
+  };
+
+  canvas.onclick = e => {
+    e.stopPropagation();
+    updatePDFControls();
+  };
+});
+  };
+})();
+ 
+//##Section 4.1 Network Stuff
+
+(function initNetworkWatchers() {
+  const S = window.AppState;
+
+  function pauseAllMSE(reason) {
+    S.domCache.forEach((div, id) => {
+      const r = S.requests.get(id);
+      if (!r || !r.usesMSE || !r.videoEl) return;
+      if (!r.videoEl.paused) {
+        r.videoEl.pause();
+        r._pausedByNetDrop = true;
+      }
+      r.dlPaused = true;
+      r.mseAction = reason;
+      updateMSEInfoBox(div);
+    });
+  }
+
+  function resumeAllMSE() {
+    S.domCache.forEach((div, id) => {
+      const r = S.requests.get(id);
+      if (!r || !r.usesMSE) return;
+      r.dlPaused = false;
+      r._pausedByNetDrop = false;
+      r.lastActivity = Date.now();           // reset stale clock
+     r.mseAction='Reconnecting';
+      // Reconnect media WS if needed and resume from current bytesReceived
+      const resumeObj = {
+        url: r.url, id: r.id,
+        bytesReceived: r.bytesReceived,
+        method: r.method, socketType: 'media'
+      };
+      rotateServer(resumeObj, 'media').then(() => {
+        if (r.videoEl && r.videoEl.readyState >= 2) {
+          r.videoEl.play().catch(() => {});
+        }
+      r.mseAction='Streaming';
+      }).catch(()=>{
+        r.mseAction='Reconnect Failed';
+      });
+    });
+  }
+
+  window.addEventListener('offline', () => {
+    U('📡 Network lost boyiee..','toast');
+    pauseAllMSE('Network Offline');
+    // Also kill WS so they don't sit in CONNECTING forever
+    [S.ws, S.wsMedia].forEach(ws => {
+      if (ws) { try { ws.onclose = ws.onerror = ws.onopen = ws.onmessage = null; ws.close(); } catch(_){} }
+    });
+    S.isConnected = false;
+    S.isMediaConnected = false;
+    updateConnectionIndicator();
+  });
+
+  window.addEventListener('online', () => {
+    U('📡 Network restored — reconnecting.','toast');
+    // Stagger to avoid both sockets racing the same server
+    connectWS(null, 'text').then(() => connectWS(null, 'media').then(resumeAllMSE()));
+  });
+
+})();
+
+//## Section 5: Sidebar, Chat & Bootstrap
+
+(function initSidebar() {
+  const S = window.AppState;
+  
+  window.switchTab = tab => {
+    $$('.tab-btn').forEach(b => b.classList.toggle('active', b.id === `tab-btn-${tab}`));
+    $$('.sidebar-tab').forEach(t => t.classList.toggle('active', t.id === `tab-${tab}`));
+  };
+  
+  $('#tab-btn-shows').onclick = () => switchTab('shows');
+  $('#tab-btn-music').onclick = () => switchTab('music');
+  $('#btnOpn').onclick = () => {
+    $('#sidebar').classList.add('open');
+  //  $('#btnCls').style.display = 'inline-block';
+  };
+ /* $('#btnCls').onclick = () => {
+    $('#sidebar').classList.remove('open');
+    $('#btnCls').style.display = 'none';
+  };*/
+
+  window.getShows = () => {
+    let ws = new WebSocket('wss://mitre.paytel.workers.dev');
+    ws.onopen = () => ws.send(JSON.stringify({u: 'CMD_KV_GET?key=shows', au: getAuth()}));
+    ws.onclose=()=>ws=null;
+    ws.onmessage = m => {
+    ws.close();
+      try {
+        const resp = JSON.parse(m.data);
+        const data = JSON.parse(resp.d);
+        const tree = $('#sidebar-treeview');
+        
+        let html = '<ul class="col">';
+        const genres = Object.keys(data).sort();
+        
+        for (const genre of genres) {
+          html += `<li><div class="toggle">${genre}</div><ul>`;
+          const shows = data[genre].sort((a,b) => {
+            const t = a.title.localeCompare(b.title);
+            return t !== 0 ? t : a.ssn - b.ssn;
+          });
+          
+          for (const show of shows) {
+            const base = show.isArchive ? 'https://archive.org/details/' : 'https://archive.org/download/';
+            html += `<li><div class="toggle">${show.title} (S${show.ssn} | ${show.lang} | ${show.src})</div><ul>`;
+            
+            for (const ep of show.episodes) {
+              const href = show.isArchive ? 
+                `${base}${show.path}${ep.file}` : 
+                `${base}${show.path}${ep.file}${show.format || ''}`;
+              html += `<li><a href="${href}">${show.isArchive ? 'Archive' : 'Episode'} ${ep.num}</a></li>`;
+            }
+            html += '</ul></li>';
+          }
+          html += '</ul></li>';
+        }
+        html += '</ul>';
+        tree.innerHTML = html;
+        
+        $$('.toggle', tree).forEach(t => {
+          t.onclick = () => t.classList.toggle('show');
+        });
+        
+        $$('a', tree).forEach(a => {
+          a.onclick = e => {
+            e.preventDefault();
+            $('#sidebar').classList.remove('open');
+            const url = new URL(transformURL(a.href));
+            $('#iu').value = url.href;
+            window.currentUrl = url;
+            window.linkText = a.textContent;
+            if (url.pathname.match(/\.(mp3|mp4|flac|ogg|webm)$/i)) $('#cb').checked = true;
+            sendRequest(url, null, true);
+          };
+        });
+      } catch(e) {
+        $('#sidebar-treeview').textContent = `Error loading shows: ${e.message || e}`;
+      }
+    };
+  };
+
+  // AI Chat Module
+  S.chatHistory = [];
+  S.aiWs = null;
+  
+  const chatHTML = `
+    <div class="chat-container" id="aiChatContainer">
+      <div class="chat-header">
+        <span class="chat-title">🤖 AI Assistant</span>
+        <div style="display:flex;gap:4px">
+          <button class="chat-send" onclick="saveChat()">Save</button>
+          <button class="chat-send" onclick="loadChat()">Load</button>
+          <button class="chat-send" onclick="clearChat()">Clear</button>
+          <button class="chat-close" onclick="closeChat()" style="background:#4a9eff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer">✖</button>
+        </div>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-container">
+        <select class="chat-model-select" id="chatModel">
+          <optgroup label="Fast">
+            <option value="@cf/meta/llama-3.2-1b-instruct">Llama 3.2 1B</option>
+            <option value="@cf/meta/llama-3.2-3b-instruct">Llama 3.2 3B</option>
+          </optgroup>
+          <optgroup label="Powerful">
+            <option value="@cf/meta/llama-3.1-8b-instruct">Llama 3.1 8B</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="@cf/nvidia/nemotron-3-120b-a12b">NVIDIA</option>
+            <option value="@cf/moonshotai/kimi-2.7-code">Moonshot</option>
+          </optgroup>
+        </select>
+        <textarea class="chat-input" id="chatInput" placeholder="Ask anything..." rows="2"></textarea>
+        <button class="chat-send" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  `;
+  
+  const chatDiv = el('div');
+  chatDiv.innerHTML = chatHTML;
+  document.body.appendChild(chatDiv.firstElementChild);
+  
+  window.toggleChat = () => $('#aiChatContainer').classList.toggle('active');
+  window.closeChat = () => $('#aiChatContainer').classList.remove('active');
+  $('#btnChat').onclick = toggleChat;
+  
+  window.clearChat = () => {
+    S.chatHistory = [];
+    $('#chatMessages').innerHTML = '';
+  };
+  
+  window.saveChat = () => {
+    const key = $('#chatInput').value.trim() || 'chat_' + Date.now();
+    localStorage.setItem(key, JSON.stringify(S.chatHistory));
+    U('Saved: ' + key);
+  };
+  
+  window.loadChat = () => {
+    const key = $('#chatInput').value.trim();
+    if (!key) return U('Enter key in input');
+    const data = localStorage.getItem(key);
+    if (!data) return U('Not found');
+    S.chatHistory = JSON.parse(data);
+    $('#chatMessages').innerHTML = '';
+    S.chatHistory.forEach(m => addChatMsg(m.content, m.role));
+  };
+  
+  function addChatMsg(text, role) {
+    const div = el('div');
+    div.className = `chat-message ${role}`;
+    div.textContent = text;
+    $('#chatMessages').appendChild(div);
+    $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight;
+  }
+  
+  window.sendChat = () => {
+    const input = $('#chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    
+    addChatMsg(msg, 'user');
+    S.chatHistory.push({role: 'user', content: msg});
+    input.value = '';
+    
+    const loadDiv = el('div');
+    loadDiv.className = 'chat-message ai';
+    loadDiv.innerHTML = '<span class="chat-loading"></span>Thinking...';
+    $('#chatMessages').appendChild(loadDiv);
+    
+    const model = $('#chatModel').value;
+    
+    if (!S.aiWs || S.aiWs.readyState !== WebSocket.OPEN) {
+      S.aiWs = new WebSocket('wss://chatt.paytel.workers.dev');
+      
+      S.aiWs.onopen = () => {
+        S.aiWs.send(JSON.stringify({
+          u: 'ai_chat', q: randomId(), au: getAuth(),
+          prompt: msg, model: model, history: S.chatHistory
+        }));
+      };
+      S.aiWs.onclose=()=>S.aiWs=null;
+      S.aiWs.onmessage = ev => {
+
+        const data = JSON.parse(ev.data);
+        loadDiv.remove();
+        
+        if (data.t === 'ai_response') {
+          addChatMsg(data.d, 'ai');
+          S.chatHistory.push({role: 'assistant', content: data.d});
+        } else {
+        
+          addChatMsg('Error: ' + data.d, 'ai');
+        }S.aiWs.close();
+      };
+      
+      S.aiWs.onerror = () => {S.aiWs.close();
+        loadDiv.remove();
+        addChatMsg('Connection error', 'ai');
+      };
+    } else {
+      S.aiWs.send(JSON.stringify({
+        u: 'ai_chat', q: randomId(), au: getAuth(),
+        prompt: msg, model: model, history: S.chatHistory
+      }));
+    }
+  };
+})();
+
+// Bootstrap
+(async function bootstrap() {
+  const S = window.AppState;
+  try{//clear any intervals from paytel
+  const topInt=setInterval(function(){},0);
+  for (var i=topInt;i>0;i--){
+    window.clearInterval(i);
+     window.clearTimeout(i);
+  }
+  }catch(e){U(e)}
+   //Click event delegation for shadow dom links
+  $('#ct').addEventListener('click',e=>{
+   
+    const path = e.composedPath();
+    const shadow =$('#ct').shadowRoot;
+   
+    if(!shadow || !path.includes(shadow))return;//ignore outside of shadow
+
+   //pierce shadow
+     const a= path.find(el=>el.tagName.toUpperCase()==='A' && el.hasAttribute('href'));
+
+    if(!a || a.className==='proxy-media-link' || a.dataset.pu)return;
+ 
+   //what to.do with special protocols??
+  if(['javascript:', 'mailto:', 'tel:', 'data:', 'magnet:'].includes(a.protocol))return;
+
+   //handle anchor links
+   const href=a.getAttribute('href') || '';
+   if(href.startsWith('#')){
+    e.preventDefault();
+    const targetId = href.slice(1);
+    const target=shadow.getElementById(targetId) || shadow.querySelector(`[name="${targetId}"]`);
+   if(target) {
+    target.scrollIntoView({behavior: 'smooth'});
+   }
+   return;
+  }
+
+   e.preventDefault();
+   e.stopPropagation();
+  
+   const resolved = resolveURL(a.href);
+   if(!resolved)return;
+  
+   window.linkText = a.textContent;
+   const mediaLink = isMedia(resolved);
+   const currentTab = S.tabs.find(t=>t.id===S.activeTabId);
+
+   if($('#cb').checked && !mediaLink) {
+     const newTabId= Tabs.create(resolved.href,'Loading...',true);
+     const newTab = S.tabs.find(t=>t.id===newTabId);
+     $('#cb').checked=false;
+     if(newTab)newTab.url=resolved;
+      sendRequest(resolved,null,!mediaLink,0,'GET',null,mediaLink);
+   }else{
+      if(currentTab)currentTab.url = resolved;
+      sendRequest(resolved,null,!mediaLink,0,'GET',null,mediaLink);
+   }
+  });
+
+  //Event delegation for forms
+   $('#ct').addEventListener('submit',e=>{
+    e.preventDefault();
+     const path = e.composedPath();
+     const shadow=$('#ct').shadowRoot;
+
+     if(!shadow || !path.includes(shadow))return;
+
+    const form = path.find(el=>el.tagName.toUpperCase()==='FORM')
+    if(form.tagName.toUpperCase() !== 'FORM')return;
+    if(!form)return;
+
+     e.preventDefault();
+
+    const currentTab = S.tabs.find(t=>t.id===S.activeTabId);
+    if(!currentTab) return;
+
+    const frmData = new FormData(form);
+    const method = (form.method || 'GET').toUpperCase();
+    let action = form.getAttribute('action') || '';
+    if(!action) action = currentTab.url.pathname+currentTab.url.search;
+
+    const url = new URL(transformURL(action),currentTab.url.origin);
+
+    if(method==='GET'){
+     const params = new URLSearchParams();
+     frmData.forEach((v,k)=>params.append(k,v));
+     url.search = params.toString();
+     sendRequest(url,null,false,0,method,null,true);
+    }else{
+     sendRequest(url,null,false,0,method,null,true);
+    }
+    });
+
+   //enable zooming
+  $('meta[name="viewport"]').setAttribute('content','user-scalable=yes');
+
+  $('#iu').onkeyup = e => {
+    if (e.key === 'Enter') {
+      let val = $('#iu').value;
+      S.currentURL= new URL(transformURL(val));
+      sendRequest(S.currentURL, null, true,0,'GET',null,false);
+    }
+  };
+   $('#msgs').ondblclick= () =>adjustAudioRate();
+  $('#iu').ondblclick = () => {fade($('#pg'));fade($('#pg2'))}
+  $('#pg').ondblclick = () =>{
+    const el = $('#pg'); 
+    if(el.textContent.startsWith('Proxying')){
+      $('#iu').value=el.textContent.replace('Proxying: ','');
+   }
+  };
+  $('#bck').onclick = async () => {
+    clearRequestTimeouts();
+   const tab=window.AppState.tabs.find(t=>t.id===window.AppState.activeTabId)
+    if (tab && tab.history.length > 1) {
+     // tab.history.pop();//wait to to pop until succesful successful proxy (handleText)
+      const prev = tab.history[tab.history.length-2];//2 to account for current
+      window.AppState.backing=true;
+      U(`⬅Back that thang up 🚛 ${prev}`);
+      sendRequest(prev, null, false);//,0,'GET',null,true);
+    }
+  };
+  
+  $('#rf').onclick =async() => {
+   S['medRotating']=false;
+   S['txtRotating']=false;
+   clearRequestTimeouts();
+   U('Rotating Server.');
+  rotateServer();
+  await DL(10);
+  rotateServer(null,'media');
+  };
+  
+  // Batch download button
+  $('#bs').onclick = () => {
+    if (S.downloadingImages) {
+      S.downloadingImages = false;
+      $('#bs').value = '↓';
+    } else {
+    try{
+      startBatchDownload();
+    }catch(e){U(e)}
+    }
+  };
+    window.setupStopBtn=()=>{
+      const btn=$('#btn-stop-download');
+      if(!btn)return;
+
+    btn.onclick=()=>{
+    const S=window.AppState;
+    btn.classList.remove('show');
+
+    //find active vid/aud request
+     let actReq=null;
+    for(const [id, r] of S.requests){
+     if((r.isVideo || r.isAudio) && (r.isOpen || r.usesMSE)){
+      actReq=r;break;
+     }
+    }
+
+   if(!actReq)return;
+   actReq.userPaused=true;
+   actReq.dlPaused=true;
+   actReq.isRecovering=false;
+   actReq.emergency=false;
+
+    if(S.wsMedia){
+    S.wsMedia.onclose = S.wsMedia.onerror = S.wsMedia.onmessage = S.wsMedia.onopen = null;
+   S.wsMedia.close();
+   S.wsMedia=null;
+   S.isMediaConnected=false;
+   updateConnectionIndicator();
+    }
+  prewarmPool('media').catch(()=>{});
+  updateStopButton();
+  requestAnimationFrame(()=>{
+   if(!actReq.dlPaused)btn.classList.remove('show')
+  });
+   showResumeOptions(actReq);
+   };
+  }
+
+  $('#hide').onclick = async () => {
+   if($('#overlay').style.display==='flex'){
+    $('#overlay').style.display='none';
+   }else{
+    $('#overlay').style.display = 'flex';
+    }
+  };
+  
+$('#tab-btn-options').onclick = () => switchTab('options');
+
+const optsDiv = $('#sidebar-options');
+optsDiv.innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:12px;padding:6px">
+    <h3 style="margin:0 0 6px;color:var(--accent);font-size:16px">Streaming Options</h3>
+
+    <label class="custom-cb" style="padding:0">
+      <input id="opt-smart" type="checkbox" ${S.options.useSmartDefaults ? 'checked' : ''}>
+      <span class="checkmark"></span>
+      <span>Use smart bitrate-based defaults</span>
+    </label>
+
+    <label style="font-size:11px;opacity:0.8">Max Buffer Memory (MB)</label>
+    <input id="opt-mem-max" type="number" value="${S.options.maxBufferMemoryMB}" min="20" max="2000"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label style="font-size:11px;opacity:0.8">Buffer Target Memory (MB)</label>
+    <input id="opt-mem-target" type="number" value="${S.options.bufferMemoryTargetMB}" min="10" max="1500"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label style="font-size:11px;opacity:0.8">Streaming Threshold (MB)</label>
+    <input id="opt-threshold" type="number" value="${S.options.mseThresholdMB}" min="5" max="5000"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label style="font-size:11px;opacity:0.8">Target Buffer (sec)</label>
+    <input id="opt-max-ahead" type="number" value="${S.options.maxBufferAhead}" min="20"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label style="font-size:11px;opacity:0.8">Min Buffer (sec)</label>
+    <input id="opt-target" type="number" value="${S.options.bufferTarget}" min="10"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label style="font-size:11px;opacity:0.8">Cleanup Behind (sec)</label>
+    <input id="opt-cleanup" type="number" value="${S.options.cleanupBehind}" min="0"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label style="font-size:11px;opacity:0.8">mp4box nbSamples</label>
+    <input id="opt-nbsamples" type="number" value="${S.options.nbSamples}" min="1" max="200"
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+ 
+   
+    <label class="custom-cb" style="padding:0;margin-top:4px">
+      <input id="opt-chunking" type="checkbox" ${S.options.useMediaChunking ? 'checked' : ''}>
+      <span class="checkmark"></span>
+      <span>Range-chunk media downloads</span>
+    </label>
+
+    <label style="font-size:11px;opacity:0.8">Chunk size (MB)</label>
+    <input id="opt-chunk-size" type="number"
+      value="${(S.options.mediaChunkSize/(1024*1024)).toFixed(2)}" min="0.25" max="5" step="0.25" 
+      style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
+
+    <label class="custom-cb" style="padding:0;margin-top:4px">
+      <input id="opt-toast" type="checkbox" ${S.options.useToast ? 'checked' : ''}>
+      <span class="checkmark"></span>
+      <span>Use toast popups (bottom)</span>
+    </label>
+
+    <button id="opt-save" style="margin-top:8px;padding:8px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:bold">Save</button>
+  </div>
+`;
+
+function updateOptsDisabled() {
+  const smart = $('#opt-smart').checked;
+  const chunking = $('#opt-chunking').checked;
+  $('#opt-max-ahead').disabled = smart;
+  $('#opt-target').disabled = smart;
+  $('#opt-cleanup').disabled = smart;
+  $('#opt-mem-max').disabled = !smart;
+  $('#opt-mem-target').disabled = !smart;
+   $('#opt-chunk-size').disabled=!chunking;
+}
+
+$('#opt-smart').onchange = updateOptsDisabled;
+$('#opt-toast').onchange = updateOptsDisabled;
+updateOptsDisabled();
+
+$('#opt-save').onclick = () => {
+  S.options.useSmartDefaults = $('#opt-smart').checked;
+  S.options.useToast = $('#opt-toast').checked;
+  S.options.useMediaChunking=$('#opt-chunking').checked;
+  
+  const mb = Math.min(5, Math.max(0.25,
+    parseFloat($('#opt-chunk-size').value) || 1
+  ));
+  S.options.mediaChunkSize = Math.round(mb * 1024 * 1024);
+  S.options.mseThresholdMB = parseInt($('#opt-threshold').value, 10) || 45;
+  S.options.maxBufferAhead = parseInt($('#opt-max-ahead').value, 10) || 180;
+  S.options.bufferTarget = parseInt($('#opt-target').value, 10) || 90;
+  S.options.cleanupBehind = parseInt($('#opt-cleanup').value, 10) || 12;
+  S.options.maxBufferMemoryMB = parseInt($('#opt-mem-max').value, 10) || 100;
+  S.options.bufferMemoryTargetMB = parseInt($('#opt-mem-target').value, 10) || 60;
+  S.options.nbSamples = parseInt($('#opt-nbsamples').value, 10) || 20;
+  localStorage.setItem('options', JSON.stringify(S.options));
+  updateOptsDisabled();
+   $('#sidebar').classList.remove('open');
+  U('Options saved','toast');
+};
+
+  $('#overlay').ondblclick = (e) =>{
+     $('#overlay').style.display = 'none';
+  }
+
+  window.addEventListener('beforeunload',()=>{
+   closeAllTabs();
+   clearRequestTimeouts();
+   revokeAllRequests();
+  window.onerror=null;
+
+ 
+  [...(S.wsPool?.text || []), ...(S.wsPool?.media || [])].forEach(({ws}) => {
+    try { ws.onclose = ws.onopen = ws.onmessage = ws.onerror = null; ws.close(); } catch (_) {}
+  });
+
+});
+
+  document.addEventListener('click', e => {
+    const sb = $('#sidebar');
+    if (sb.classList.contains('open') && 
+        !sb.contains(e.target) && 
+        e.target.id !== 'btnOpn' && 
+        !$('#aud-wrapper').contains(e.target) &&
+        !$('#seekSliderContainer').contains(e.target)) {
+       sb.classList.remove('open');
+    //   $('#btnCls').style.display = 'none';
+    }
+    
+    if (S.sliderActive && 
+        !$('#seekSliderContainer').contains(e.target) && 
+        !$('#trackTimeDetail').contains(e.target)) {
+      hideSeekSlider();
+    }
+  });
+
+  
+  // Load libraries via proxy
+  const loadLib = (url, cb, svr=null) => {
+    let ws = new WebSocket(`wss://${svr || servers[Math.floor(Math.random()*servers.length)]}.paytel.workers.dev`);
+    ws.onclose=()=>{ws.onmessage=null;ws.onopen=null;ws.onclose=null;ws=null;}
+    ws.onopen = () => ws.send(JSON.stringify({u: url, au: getAuth()}));
+    ws.onmessage = m => {
+      ws.close();
+      const r = JSON.parse(m.data);
+      if (r.c?.includes('javascript')) {
+        const s = el('script');
+        s.textContent = r.d;
+        document.head.appendChild(s);
+        if (cb) cb();
+      }
+    };
+  };
+
+  // Load PDF.js with worker
+  loadLib('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', () => {
+    let wss = new WebSocket('wss://bn.paytel.workers.dev');
+    wss.onclose=()=>{wss.onopen=null;wss.onmessage=null;wss.onclose=null;wss=null;}
+    wss.onopen = () => {
+      wss.send(JSON.stringify({
+       u: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+       au: getAuth()
+      }));
+    };
+    wss.onmessage = ev => {
+      wss.close();
+      const r = JSON.parse(ev.data);
+      if (r.c?.includes('javascript')) {
+        const blob = new Blob([r.d], {type: 'application/javascript'});
+        pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+      }
+    };
+  },'kazak');
+
+  // Load jsmediatags
+  loadLib('https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js',()=>{
+    if(typeof jsmediatags !=='undefined'){
+      window.jsmediatags = jsmediatags;
+    }
+   }); 
+
+  // Load mp4box
+  let mws = new WebSocket('wss://mitre.paytel.workers.dev');
+  mws.onclose=()=>{mws.onclose=null;mws.onmessage=null;mws.onclose=null;mws=null;}
+  mws.onopen = () => mws.send(JSON.stringify({u: 'CMD_KV_GET?key=mp4Beta', au: getAuth()}));
+  mws.onmessage = async m => {
+    mws.close();
+    const code = JSON.parse(m.data).d;
+    const blob = new Blob([code], {type: 'application/javascript'});
+    const objUrl = URL.createObjectURL(blob);
+   try{ S.mp4box = await import(objUrl);}catch(e){$('#iu').value=e}
+    S.mp4boxLoaded = true;//U(typeOf S.mp4box.createFile);
+   URL.revokeObjectURL(objUrl);
+  };
+ /* window.startMSECheckLoop = function () {
+  const S = window.AppState;
+  if (S.mseCheckInterval) return;
+
+  S.mseCheckInterval = setInterval(() => {
+    let anyActive = false;
+
+    S.domCache.forEach((div, id) => {
+      const r = S.requests.get(id);
+      if (r && r.usesMSE && r.isOpen && !r.fatalError && !r.dlPaused) {
+        anyActive = true;
+        checkBuffer(r).catch(() => {});
+      }
+    });
+
+    if (!anyActive) {
+      stopMSECheckLoop();
+      return;
+    }
+
+    // one global media reconnect attempt per tick, only if we need it
+    if (!S.isMediaConnected || !S.wsMedia || S.wsMedia.readyState !== WebSocket.OPEN) {
+      if (S.medRotating) return;
+      for (const [id, r] of S.requests) {
+        if (
+          r.usesMSE &&
+          r.isOpen &&
+          !r.dlPaused &&
+          !r.fatalError &&
+          !r.isRecovering &&
+          r.bytesReceived < r.totalBytes
+        ) {
+          rotateServer({
+            url: r.url,
+            id: r.id,
+            bytesReceived: r.expectedOffset ?? r.bytesReceived,
+            method: r.method,
+            socketType: 'media'
+          }, 'media');
           break;
         }
       }
     }
-  };
-  w.onopen=i=>{
-   c=!!1;S();
-   if(firstLoad)joke()
-  };
-  w.onmessage=m=>{
-    if(m.data instanceof ArrayBuffer)handleStream(m.data);//uint8Array data means streamed data
-    if(typeof m.data==='string')handleResponse(m.data);
-  };
-  m=null;
-},
-
-// Connection status color
-S=i=>{if(c){bs.style.backgroundColor='#4a9eff'}else{bs.style.backgroundColor='#ee4455'}},
-
-// Proxy URL (handle specials);t is a boolean for 'track' meaning should we keep this request in history (true) or is it a background request like loading images, css etc (t=false)
-Yy=async t=>{
-  if(t)pg.style.opacity=1;
-  if(!c)await Rw();
-  let x='';
-  if(ic(iu.value,'p:')){
-    x=iu.value
-  }else if(sw(iu.value,'?')){
-    x=`https://search.aol.com/search?q=${iu.value.slice(1)}`
-  }else if(sw(iu.value,'!')){
-    x=`https://search.aol.com/search?q=archive.org ${iu.value.slice(1)}`
-  }else if(sw(iu.value,'anysex.com')&&ic(iu.value,'/?br=')){
-    x='https://'+iu.value.split('?br=')[0]+'?br=10000';
-  }else if(sw(iu.value,'xcafe.com')&&ic(iu.value,'/?download=')){
-    x='https://'+iu.value.split('?download=')[0]+'?br=10000';
-  }else{
-    x=`https://${iu.value}`
-  }
-  u=new URL(x);
- let method = 'GET';
-
-  Z(u,'',t,0,method,'');
-},
-
-// Exec JS response
-JS=async i=>{let e=l('script');e.textContent=i;try{J(document.body,e)}catch(er){U(er)}await Wt('',()=>pdfjsLib,0);if(getwkr){let src=window.URL.createObjectURL(new Blob([i],{type:'application/javascript'}));try{pdfjsLib.GlobalWorkerOptions.workerSrc=src;getwkr=!!0}catch(er){U(er)}}},
-
-// Handle string msgs
-handleResponse=async i=> {
-  //f=data from ws message (facts);t in this case is 'type' of response
-  let f=JSON.parse(i),t=f.t;
-  if(t==='s'){//type is Stream
-    let r=p.get(f.q);//r is 'request' q is requestId
-    if(!r)return;
-    r.c=f.c;r.o=!!1;//r.c is request contentType. r.o is setting request to Open
-    let meta=JSON.parse(f.d);
-    if(!r.tl)r.tl=meta.totalLength||0;
-    r.mb=(r.tl/1048576).toFixed(2);//convert to megabytes (1024*1024)
-    if(sw(r.c,'video')){
-      r.v=!!1;vdld=!!1;//request.video is true and vdld (video downloading)
-    }
-    if(sw(r.c,'audio')){r.a=!!1;adld=!!1}//request.audio is true and adld (audioDownloading)
-    if(sw(r.c,'image')){r.i=!!1;r.img=l('img')}//request.image
-    if(ic(r.c,'application/pdf')){r.pdf=!!1;/*setUpPDF(r)*/}
-    if(ic(r.c,'epub'))r.epub=!!1;
-
-    r.usesMSE=shouldUseMSE(r);
-
-  //Give user feedback when media loaded
-    if(r.v && !r.usesMSE){r.vid=l('video');r.vid.controls=!!1;r.vid.addEventListener('canplaythrough',loadDone)}
-    if(r.a && !r.usesMSE){r.vid=l('video');r.vid.controls=!!1;r.vid.addEventListener('canplaythrough',loadDone)}
-  }
-  else if(t==='r'){if(ic(f.c,'/html')){H(f.d)}else if(ic(f.c,'/javascript')){JS(f.d)}else if(ic(f.c,'/css')){z(f.d)}else{W(sd,`<pre>${escapeHtml(f.d)}</pre>`)}}
-  else if(t==='e'){handleEndOfStream(f.q)}
-  else if(t==='er'){U(f.d);await Rw()}
-  else if(t==='info'){U(f.d)}
-},
-//feedback that media has loaded
-loadDone=r=>{
- r.target.removeEventListener('canplaythrough',loadDone);
- U(`${pg.innerText}..DONE!`);//Update message
- fade(pg);
-},
-
-// Handle binary chunks
-handleStream=async buf=>{
-  let x=new Uint8Array(buf),
-   reqIdBytes = 9,
-   reqIdStr = n.decode(x.subarray(0, reqIdBytes)).trim(),//get requestId
-   r = p.get(reqIdStr),//get request from map
-   payload = x.subarray(reqIdBytes);
-   if(!r) return;
-   r.f.push(payload);
-   r.b += payload.length;
-   let prct=((r.b/r.tl)*100).toFixed(2);
-   if(!dld&&prct<=100){
-    U(`Download Progress: ${(r.b/1048576).toFixed(2)} of ${r.mb} mb (${prct}%)`);
-    pb.style.width=`${prct}%`;
-  }
-//close connection when over limit of size of mp4 browser can handle as a blob and call endOfStream
- if(r.b>MP4_MSE_THRESHOLD){
-  r.overThreshold=!!1;
-  w.close();
-  handleEndOfStream(r.q);
- }
-},
-
-// End stream/chunk
-handleEndOfStream=async q=>{
-  const r = p.get(q);
-  if (!r) return;
-   r.blob=new Blob(r.f,{type: r.c});
-    r.ou=window.URL.createObjectURL(r.blob);
-    if(r.i){
-      handleImages(Q('',sd,`img[data-pq="${q}"]`),r)//Q is querySelector.Looking for an img with matching requestId
-     }
-    else if(r.pdf){r.h=!!1;pb.style.width='0%';await U('Loading PDF...');setUpPDF(r);HPDF(r);}
-    else if(r.epub){try{var book=ePub(r.ou).ready.then(function(){ var rend=book.renderTo("pl",{method:"default",width:"100%",height:"100%"}); var dis=rend.display()} );}catch(er){W(pl,er)}}
-    else if(r.a){r.h=!!1;
-     pl.scrollTo({top:0,behavior:'smooth'});
-     pb.style.width='0%';
-       if(audList.length===0&&r.a){//first audio file...inform we are setting it up
-        await U('Loading Audio...');
-        await DL(1000);
-      }else if(audList.length>0 && r.a){//inform that it is being added to player queue
-        await U('Adding to Playlist..');
-        await DL(600);
-       await U(`${pg.innerText}Done`);
-       fade(pg)
-    }
-     handleAudio(r);
-     adld=!!0;//done downloading
-   }else if(r.v){
-    pl.scrollTo({top:0,behavior:'smooth'});
-     pb.style.width='0%';await U('Loading Video. Calm Your Tits...');await DL(250);vdld=!!0;
-     handleVideo(r);
-   }
-},
-
-// Media events
-E=(e,r)=>{if(r.i){ e.onload=()=>V(r) }else{ e.onended=()=>r.o=!!0}e.onerror=()=>V(r)},
-
-// Insert image
-handleImages=(i,r)=>{//i is a reference to a img element if found with Q call in call to this fumctiom, r is request object
-  if(r.k){//r.k means was the request a linK (i.e. user clicked a link, so keep track of it
-   if(firstLoad){//for goofy images when app loads
-     r.img.src=r.ou;E(r.img,r);J(sd,r.img);firstLoad=!!0;iu.value='';
-    }else{ 
-     if(keyList<=0)toggleMediaDiv();//first media element, so open media div
-     if(!keyList.includes(r.q)){
-      keyList.push(r.q);
-      if(!domCache.has(r.q))createMediaContentDiv(r);//create mediaContentDiv and keep account of ot
-      if(keyList[keyList.length-1]===r.q)showMedia(r.q,1);
-     }
-   }
-    fade(pg)
-   }else if(!r.k&&!i){V(r)//instances where perhaps server is still returning requested images, but iser has changed proxied page and no img element was!found. ReVoke the objectURL and move on
-   }else{
-    si--;E(i,r);i.src=r.ou;//si is a counter for requested images,as they arrive decrement it. Set the img's src
-    if(si<=0)dld=!!0
-   }
-},
-
-//clean up audio player stuff on close
-closePlayer=async r=>{
- hideSeekSlider();
- audPlayer.pause();
- audPlayer.removeAttribute('src');
- audPlayer.load();
-  if(r) V(r);
- for(const t of audList)V(t.data)//ReVoke urls
- audList=[];
- renderPlaylist();
- ge('icon').style.display='none';
- if(playerVis){togglePlayerVisible();await DL(600)}
-ge('aud-wrapper').style.display='none';playerVis=!!0;
- audPlayer=null;
- next.removeEventListener('click',tryNext);
- next.removeEventListener('dblclick',seekForward);
- prev.removeEventListener('click',tryPrev);
- prev.removeEventListener('dblclick',seekBack);
- play.removeEventListener('click',togglePlay);
-
- // clear any pending timers just in case
- if(nxtClickTmr){ clearTimeout(nxtClickTmr); nxtClickTmr=null; }
- if(prevClickTmr){ clearTimeout(prevClickTmr); prevClickTmr=null; }
-},
-
-//mediaContent navigation
-showNavBtns=()=>{Q(1,d,'.md-nav').forEach(btn=>{btn.classList.remove('fade-out');setTimeout(hideNavBtns,3500)})},
-hideNavBtns=()=>Q(1,d,'.md-nav').forEach(btn=>btn.classList.add('fade-out')),
-
-//basically a media card
-createMediaContentDiv=r=>{
- const mediaDiv=l('div');
- mediaDiv.className='media-content';
- mediaDiv.id=`media-${r.q}`;
- // mediaDiv.addEventListener('click',()=>showNavBtns());
- let mediaEl;
- if(r.v){
-   mediaEl=l('video');
-   mediaEl.src=r.ou;
-   mediaEl.controls=!!1;
-   mediaEl.ontouchstart=()=>showNavBtns();
-   mediaEl.addEventListener('canplaythrough',loadDone);
- }else if(r.i){ 
-   mediaEl=l('img');
-   mediaEl.src=r.ou;
-  mediaEl.onclick=()=>showNavBtns();
- }
- E(mediaEl,r);
- mediaEl.style.width='100%';
- mediaEl.style.height='100%';
- mediaEl.style.objectFit='contain';//maybe should be 'cover'?
- const btnClose=l('button');
-  btnClose.className='media-close-btn md-nav';
-  btnClose.innerText='X';
-  btnClose.onclick=()=>{r.h=!!0;closeMedia(r.q)};
-  mediaDiv.appendChild(mediaEl);
-  mediaDiv.appendChild(btnClose);
-  mediaContainer.appendChild(mediaDiv);
-  domCache.set(r.q,mediaDiv);
-},
-
-
-handleVideo=async r=>{
-  r.h=!!1;//r.h is a flag.for 'holding' a request. Keeps objectURL from being revoked for videos. This allows user to proxy other pages without destroying video src's. Revoked when media element closed
-   cb.checked=!!0;
-    if(keyList.length<=0)toggleMediaDiv();
-     if(!keyList.includes(r.q)){
-         keyList.push(r.q);
-        if(!domCache.has(r.q))createMediaContentDiv(r);
-        if(keyList[keyList.length-1]===r.q)showMedia(r.q,1);
-   }
-},
-
-//Time tracker for audio
-updateTrackTimeDetail=(cur=audPlayer.currentTime,tot=audPlayer.duration)=>{
- if(!cur || !tot){
- trackTimeDetail.textContent='0:00:00';
-}else{
- trackTimeDetail.textContent=`${formatTime(cur)} of ${formatTime(tot)}`;
-}
-},
-
-//get audio player set up with eventListeners. 
-handleAudio=async r=>{
- cb.checked=!!0;
-    if(!audPlayer){
-      audPlayer=l('audio');//the 'l' function is for eLement (i.e. createElement)
-      audPlayer.controls=!!0;
-      audPlayer.addEventListener('timeupdate',()=>{
-     updateTrackTimeDetail();
-    }); 
-     //need wrapper to pass arg and keep ref for listener removal
-      let closeWrapper=()=>{closePlayer(r);ge('btn-close-player').removeEventListener('click',closeWrapper);}
-      close.addEventListener('click',closeWrapper);
-      next.addEventListener('click',tryNext);
-      next.addEventListener('dblclick',seekForward);
-      prev.addEventListener('click',tryPrev);
-      prev.addEventListener('dblclick',seekBack)
-      play.addEventListener('click',togglePlay);
-      initializeSliderEvents();
-    }    
-    audPlayer.addEventListener('canplaythrough',loadDone);
-    let tags=await parseMediaTags(r)||{};
-
-     let trackInfo={data: r, tags: tags, removeAfter:false};
-     audList.push(trackInfo);
-     renderPlaylist();
-     if(audList.length===1){
-       audPlayer.src=r.ou;
-       ge('icon').style.display='inline-block';
-       togglePlayerVisible();
-       playTrack(0);
-       audPlayer.onended=async()=>{
-         // when a track finishes, check for auto-remove flag
-         const curIdx=parseInt(audPlayer.dataset.trackIndex);
-         if(audList[curIdx] && audList[curIdx].removeAfter){
-           audList.splice(curIdx,1);
-           renderPlaylist();
-           if(audList.length===0){closePlayer();return;}
-         }
-         nextTrack();
-       };
-    }
-},
-
-//display image or video in media content div
-showMedia=(key,dir)=>{
-  if(isAnimating)return;
-  const index=keyList.indexOf(key);
-   if(index===-1)return;
-   const currentEl=currentMediaIndex>-1 ? domCache.get(keyList[currentMediaIndex]) : null;
-   const nextEl=domCache.get(key);
-   if(!nextEl)return;
-   if(currentMediaIndex===index){
-    nextEl.classList.add('active');
-   currentMediaIndex=index;
-   return;
-   }
-  isAnimating=!!1;
-  const outClass=dir===1 ? 'slide-right' : 'slide-left';
-  const inClass='active';
-  nextEl.classList.add(inClass);
-  nextEl.classList.remove('slide-right','slide-left');
-  if(currentEl){
-   currentEl.classList.remove('active');
-   currentEl.classList.add(outClass);
-  }
-
-  setTimeout(()=>{
-   if(currentEl){
-    currentEl.classList.remove(outClass);
-    currentEl.classList.remove('active');
-   }
-  currentMediaIndex=index;
-  isAnimating=false;
-  },401);
-hideNavBtns();
-},
-
-closeMedia=key=>{try{
-  if(isAnimating)return;
-  const index=keyList.indexOf(key);
-  if(index===-1)return;
-  const data=p.get(key);
-  if(data)V(data);
-  const el=domCache.get(key);
-  if(el){
-   el.remove();
-   domCache.delete(key);
-  }
- keyList.splice(index,1);
- if(index<currentMediaIndex){
- }else if(index===currentMediaIndex){
-   if(keyList.length>0){
-    const nextKey=keyList[0];
-    showMedia(nextKey,1);
-   }else{
-    currentMediaIndex=-1;
-    toggleMediaDiv(!!0);
-  }
- }}catch(er){W(pl,er)}
-},
-
-// helper that moves the audio a few seconds (positive or negative)
-seekAudio=(secs)=>{
-  if(!audPlayer) return;
-  let t = audPlayer.currentTime + secs;
-  if(t < 0) t = 0;
-  if(audPlayer.duration && t > audPlayer.duration) t = 0;
-  audPlayer.currentTime = t;
-},
-
-//Show the seek slider with nice animation
-showSeekSlider=()=>{
-  if(!audPlayer||!audPlayer.duration)return;
-  sliderActive=!!1;
-  seekSliderContainer.classList.add('active');
-  updateSliderDisplay();
-  sliderIsDragging=!!0;//reset dragging state
-},
-
-//Hide the seek slider
-hideSeekSlider=()=>{
-  sliderActive=!!0;
-  sliderIsDragging=!!0;
-  seekSliderContainer.classList.remove('active');
-  if(sliderLongPressTimer){
-    clearTimeout(sliderLongPressTimer);
-    sliderLongPressTimer=null;
-  }
-},
-
-//Update slider visual position and time display
-updateSliderDisplay=()=>{
-  if(!audPlayer||!audPlayer.duration)return;
-  const percent=(audPlayer.currentTime/audPlayer.duration)*100;
-  sliderFill.style.width=`${percent}%`;
-  sliderHandle.style.left=`${percent}%`;
-  sliderTime.textContent=formatTime(audPlayer.currentTime);
-  sliderDuration.textContent=formatTime(audPlayer.duration);
-},
-
-//Get slider position from mouse/touch event
-getSliderPosition=e=>{
-  if(!sliderTrackEl)return 0;
-  const rect=sliderTrackEl.getBoundingClientRect();
-  let clientX=e.clientX||e.touches?.[0].clientX||0;
-  const pos=clientX-rect.left;
-  return Math.max(0,Math.min(pos/rect.width,1));
-},
-
-//Handle slider drag for seeking
-handleSliderDrag=e=>{
-  if(!sliderIsDragging||!audPlayer||!audPlayer.duration)return;
-  e.preventDefault();
-  const percent=getSliderPosition(e);
-  const newTime=percent*audPlayer.duration;
-  audPlayer.currentTime=newTime;
-  updateSliderDisplay();
-},
-
-//Handle slider drag start
-handleSliderDragStart=e=>{
-  if(!sliderActive||!audPlayer||!audPlayer.duration)return;
-  e.preventDefault();
-  sliderIsDragging=!!1;
-  const percent=getSliderPosition(e);
-  const newTime=percent*audPlayer.duration;
-  audPlayer.currentTime=newTime;
-  updateSliderDisplay();
-},
-
-//Handle slider drag end
-handleSliderDragEnd=()=>{
-  sliderIsDragging=!!0;
-},
-
-//Initialize slider event listeners
-initializeSliderEvents=()=>{
-  if(!trackTimeDetail)return;
-  //Long-press detection on trackTimeDetail
-  trackTimeDetail.addEventListener('touchstart',e=>{
-    e.preventDefault();
-    sliderLongPressTimer=setTimeout(()=>{
-      showSeekSlider();
-      sliderLongPressTimer=null;
-    },LONG_PRESS_DURATION);
-  });
-  
-  trackTimeDetail.addEventListener('touchend',()=>{
-    if(sliderLongPressTimer){
-      clearTimeout(sliderLongPressTimer);
-      sliderLongPressTimer=null;
-    }
-  });
-
- /* trackTimeDetail.addEventListener('touchmove',()=>{
-    if(sliderLongPressTimer){
-      clearTimeout(sliderLongPressTimer);
-      sliderLongPressTimer=null;
-    }
-  });*/
-
-  //Slider interactions
-  if(sliderHandle){
-    sliderHandle.addEventListener('touchstart',handleSliderDragStart);
-  //  sliderHandle.addEventListener('mousedown',handleSliderDragStart);
-  }
-
-  if(sliderTrackEl){
-    sliderTrackEl.addEventListener('touchstart',handleSliderDragStart);
- //   sliderTrackEl.addEventListener('mousedown',handleSliderDragStart);
-  }
-
-  //Global drag handlers
-  d.addEventListener('touchmove',handleSliderDrag);
- // d.addEventListener('mousemove',handleSliderDrag);
-
-  //Drag end handlers
-  d.addEventListener('touchend',handleSliderDragEnd);
- // d.addEventListener('mouseup',handleSliderDragEnd);
-
-  //Close slider on outside tap
-  /*d.addEventListener('touchstart',e=>{
-   if(audDiv.contains(e.target))return;
-    if(sliderActive&&!seekSliderContainer.contains(e.target)&&!trackTimeDetail.contains(e.target)){
-      hideSeekSlider();
-    }
-  });*/
-
- /* d.addEventListener('click',e=>{if(audDiv.contains(e.target))return;
-    if(sliderActive&&!seekSliderContainer.contains(e.target)&&!trackTimeDetail.contains(e.target)){
-      hideSeekSlider();
-    }
-  });*/
-
-  //Update slider display during playback
-  audPlayer.addEventListener('timeupdate',()=>{
-    if(sliderActive&&!sliderIsDragging){
-      updateSliderDisplay();
-    }
-  });
-},
-
-adjustPlayRate=async ()=>{
- audPlayer.playbackRate+=0.25;
- if(audPlayer.playbackRate>2.0)audPlayer.playbackRate=1.0;
- await U(`Playback Speed: ${audPlayer.playbackRate}`);
- fade(pg);
-},
-
-seekForward=(e)=>{
-   e.stopPropagation();
-  // cancel any pending single-click timer (could be the first click of a dblclick)
-  if(nxtClickTmr){
-   clearTimeout(nxtClickTmr);
-   nxtClickTmr=null;
-  }
-  seekAudio(10);
-},
-
-tryNext=()=>{
- // only schedule nextTrack if we don't already have a timer pending
- if(nxtClickTmr) return;
- nxtClickTmr=setTimeout(()=>{
-  nextTrack();
-  nxtClickTmr=null;
- },CLICK_DELAY);
-},
-
-nextTrack=()=>{
- if(audList.length<1)return;
- let cur=parseInt(audPlayer.dataset.trackIndex);
- // if current track marked remove-after, drop it before moving on
- if(audList[cur] && audList[cur].removeAfter){
-   audList.splice(cur,1);
-   renderPlaylist();
-   if(audList.length===0){closePlayer();return;}
-   if(cur>=audList.length) cur=0;
- }
- if(audList.length===1){playTrack(0);return;}
- let index=cur+1;
- if(index>=audList.length)index=0;
- playTrack(index);
-},
-
-playTrack=async index=>{
-
- //---To force css to restart by destroying and readding 
- let container=ge('marqueeContainer');
- let wrapper=ge('marqueeContent');
- rm(container,wrapper);
- let replace=l('div');
- replace.classList.add('marquee-content');
- replace.id='marqueeContent';
- J(container,replace);
-//---
- let track=audList[index];
- let tags=track.tags;
- audPlayer.pause();
- audPlayer.removeAttribute('src');//just cleaning up for thoroughness
- audPlayer.load();
- audPlayer.src=track.data.ou;//data in this function is the r (request object) elsewhere. 'ou' is objectUrl
- audPlayer.dataset.trackIndex=index;
- try{
-  let trackInfoStr=`${tags.title} (Artist: ${tags.artist} | Album: ${tags.album})`;
- replace.innerText=trackInfoStr;
- let el=await U(`Playing: ${trackInfoStr}`);await DL(800);fade(el);
- playState(!!1);}catch(er){U(er)}
- // update playlist highlight
- renderPlaylist();
-},
-
-
-tryPrev=(e)=>{
- if(prevClickTmr) return;
- prevClickTmr=setTimeout(()=>{
-    prevTrack();
-    prevClickTmr=null;
- },CLICK_DELAY);
-},
-
-prevTrack=async()=>{
- if(audList.length<1)return;
- if(audList.length===1){playTrack(0);return}
- let index=parseInt(audPlayer.dataset.trackIndex)-1;
- if(index<0)index=audList.length-1;
- playTrack(index);
-},
-
-seekBack=(e)=>{
-   e.stopPropagation();//keep from passing dblclick event to parent div (which has its own dblclick events) when dblclicking prev or next audio btns for seeking
-  if(prevClickTmr){
-   clearTimeout(prevClickTmr);
-   prevClickTmr=null;
-  }
-  seekAudio(-10);
-},
-
-playState=async (playIt)=>{
-let el=ge('marqueeContent');
- if(playIt){
-   let ind=el.textContent.lastIndexOf(' - PAUSED');
-   let rslt=ind===-1 ? el.textContent : el.textContent.slice(0,ind);
-   await U(rslt,el);
-   audPlayer.play();
-   ge('btn-play').textContent='⏸';
- }else{
-   await U(`${el.textContent} - PAUSED`,el);
-   audPlayer.pause();
-   ge('btn-play').textContent='▶';
- }
-},
-
-togglePlay=()=>playState(audPlayer.paused),
-
-//pdf render
-queueRenderPage=r=>{
- if(r.isRendering)r.pending=r.pageNum;
- else renderPage(r);
-},
-
-renderPage=r=>{
- r.isRendering=!!1;
- r.pdfDoc.getPage(r.pageNum).then(pg=>{
-   const scale=r.scale;
-   const vp=pg.getViewport({scale: scale});
-   r.canvas.height=vp.height;
-   r.canvas.width=vp.width;
-   const renderContext={canvasContext: r.ctx, viewport: vp};
-   pg.render(renderContext).promise.then(()=>{
-    r.isRendering=!!0;
-    r.pgInput.value=r.pageNum;
-   });
- });
-},
-
-// Render PDF
-HPDF=r=>{
-pdfjsLib.getDocument({url: r.ou}).promise.then(pdf=>{
- r.pdfDoc=pdf;
- r.cntSpan.textContent=r.pdfDoc.numPages;
- if(r.pagePending!==null){
-   renderPage(r);
-   r.pagePending=null;
- }fade(pg);
- }).catch(err=>{W(pl,err.message||err)});
-},
-
-// Set all open requests to false
-So=i=>p.forEach(r=>r.o=!!0),
-
-// Delay
-DL=async(i=100)=>new Promise(x=>setTimeout(x,i)),
-
-//timeout
-timeout=ms=>new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed Out')),ms)),
-
-// Wait loop used for delaying in several places
-Wt=async(f,t,j)=>{
-  if(f)f();while(t()&&j<55){await DL();j++}
-},
-
-// Reconnect
-Rw=async i=>{
-  await Wt(()=>w.close(),()=>c,0);await Wt(C,()=>!c,0)
-},
-
-// Query selector
-Q=(t,i,j)=>{if(t)return i.querySelectorAll(j);return i.querySelector(j)},
-
-// Revoke non-hold/open
-K=i=>p.forEach(r=>{ if(!r.h&&!r.o)V(r) }),
-
-// Cleanup request
-V=r=>{if(r.ou)window.URL.revokeObjectURL(r.ou);p.delete(r.q)},
-
-// Handle HTML responses
-H=i=>{U(`${pg.innerText}...DONE!`);a=0;si=0;dl=!!0;dld=!!0;bs.value='';let x=new DOMParser().parseFromString(i,'text/html');v(x);if(cb.checked)s(x);W(sd,x.body.innerHTML);L();Q(1,sd,'form').forEach(x=>addFormIntercept(x));fade(pg)},
-
-// Inject styles
-s=f=>Q(1,f,'style,link[rel="stylesheet"]').forEach(x=>{if(x.tagName.toLowerCase()==='link'){Z(y(x.href),'',!!0,0)}else{let e=l('style');e.textContent=x.textContent;J(sd,e)}}),
-
-// Random ID ...rand-O
-O=i=>Math.random().toString(36).substr(2,9),
-
-// Auth token
-P=f=>{
-  let x=new Date(),t=x.getUTCFullYear(),i=x.getUTCMonth(),j=x.getUTCDate();return btoa(`${t}${i}${j}`);
-},
-
-//mediatags
-parseMediaTags=r=>{
- let myTags={artist:'',title:'',album:'',year:'',image:''};
-
- if(!window.jsmediatags)return mTags;
-
- return new Promise((resolve,reject)=>{
-  window.jsmediatags.read(r.blob,{
-    onSuccess: function(rslt){
-      let data,format,hasImage=!!0;
-      let tags=rslt.tags;
-
-      if(tags.picture){hasImage=!!1;({data,format}=tags.picture);}
-     myTags={
-       artist: tags.artist || 'Unknown', 
-       title: tags.title || r.linkText || r.fileName || 'Unknown', 
-       album: tags.album || 'Unknown', 
-       year: tags.year||'', 
-       image: hasImage
-     };
-     resolve(myTags);
-   },
-   onError: function(er){
-     reject(er);
-   }
- })
-});
-},
-
-getImgB64String=(data,format)=>{
- let b64="";
- for(const i=0;i<data.length;i++){
-  b64+=String.fromCharCode(data[i]);
-  }
-return b64;
-},
-
-// Get Unloaded images
-g=j=>Array.from(Q(1,sd,'img')).filter(i=>!i.naturalWidth),
-
-// URL transform
-T=i=>i.split('my/learner_')[0].replace('https://learning.paytel.com',''),
-
-// Create URL
-y=i=>new window.URL(T(decodeURIComponent(i)),u.origin || 'https://archive.org'),
-
-// Intercept links
-L=f=>{
-  Q(1,sd,'a').forEach(l=>l.onclick=e=>{e.preventDefault();linkText=l.textContent.replace('download','');u=y(l.href);Su();Yy(!!1)})
-  Q(1,tree,'a').forEach(l=>l.onclick=e=>{e.preventDefault();sidebar.classList.remove('open');u=y(l.href);Su();if(isMedia(u))cb.checked=!!1;else cb.checked=!!0;Yy()})
-},
-
-// Inject CSS
-z=i=>{
-  let e=l('style');
-  e.textContent=i,
-  J(sd,e)
-},
-
-// Prep media in HTML
-v=f=>Q(1,f,`${!cb.checked ? 'img,' : ''}video,embed,iframe,audio`).forEach(x=>{
-  if(!ic(x.src,'data:')){
-    let vs=x.src,j,h,e;
-    if(!vs){ j=Q('',x,'source');if(j&&j.src)vs=j.src; }
-    if(vs){e=l('a');h=l('h1');e.href=vs;e.innerText=x.tagName;J(h,e);J(x.parentNode,h) }
-    x.dataset.pq=O();
-    x.dataset.pu=x.src;
-    x.src='';
-  }
-}),
-
-// Batch images to prevent too many requests to prxy worker
-k=async(x,j)=>{for(let i of x){if(!dl){return}dld=!!1;si++;Z(y(i.dataset.pu),i.dataset.pq,!!0,0);j++;if(!(j%7)){await Wt('',()=>si>0,0);si=0;await Rw()}}if(g().length&&a<5){a++;k(g(),0)}else{a=0;si=0;dl=!!0;bs.value=''}},
-
-// Create elem
-l=t=>d.createElement(t),
-
-// Send proxy req
-Z=(ur,q,t,b,method,oe=null)=>{
-  let uu=y(ur.href||ur);
-  if(t){u=uu;if(ic(u.href,'dash.clo')){window.location.href='https://dash.cloudflare.com';return}else if(ic(u.href,'ai.clo')){window.location.href='https://playground.ai.cloudflare.com';return}
-  if(h.length){if(h[h.length-1].href!==u.href)h.push(u)}else{h.push(u)}
-  Su();W(sd,`<h2>${u}</h2>`);ct.scrollTo({top:0,behavior:'smooth'});
-  }
-  if(!q)q=O();
-  if(!method)method='GET';
-  if(!p.has(q))p.set(q,{q:q,u:uu,f:[],k:t,b:b,vid:'',aud:'',img:null,mp4boxFile:null,codec:null,trackId:null,usesMSE:!!0,method:method,firstMessage:true,isMedia:isMedia(uu),chunking:false,fileName:getFileName(uu),linkText:linkText||''});
- //  let key='clientCode';
-  //  let val=encodeURIComponent(localStorage.getItem('a'))
- //  uu=`CMD_KV_PUT?key=${key}&val=${val}`;
-  if(p.get(q).isMedia && ic(u.hostname,'archive.org') ){
-  cb.checked=!!1;
-  //setUpMp4();
-  }
-  let msg={u:uu.toString(),q:q,au:P(),os:b,method:method};
-  if(oe!==null)msg.oe=oe;
-  if(method!=='GET'){msg.body=''}
-  w.send(JSON.stringify(msg));
-  let strU=truncate(`${u.hostname}${u.pathname}${u.search}${u.hash}`,98);
-  if(t)U(`Proxying: ${strU} | Request Id: ${q}..`);
-},
-
-//get file name
-getFileName=url=>{
-let file=decodeURIComponent(url.pathname.split('/').pop());
-let extInd=file.lastIndexOf('.');
-return extInd===-1 ? file : file.substr(0,extInd);
-},
-
-// Mute/pause
-mute=i=>Q(1,pl,'video,audio').forEach(x=>{x.muted=i;if(i){x.pause()}else{x.play()}}),
-
-// Sanitize HTML
-escapeHtml=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'),
-
-// Form data to obj
-extractFormData=frm=>{let fd=new FormData(frm),obj={};fd.forEach((v,k)=>{obj[k]=(obj[k]?Array.isArray(obj[k])?[...obj[k],v]:[obj[k],v]:v)});return obj},
-
-// Intercept forms
-addFormIntercept=el=>{
-  if(el.tagName==='FORM'){
-    el.onsubmit=async e=>{
-      e.preventDefault();
-      let method=(el.method||'GET').toUpperCase();
-      let action=el.getAttribute('action');
-      if(!action)action=u.pathname+u.search;
-      u=new window.URL(action,u.origin);
-      let body='';
-      if(method!=='GET'){
-        let fd=extractFormData(el);
-        if(el.enctype==='application/json'){body=JSON.stringify(fd)}else{
-          let sp=new URLSearchParams();for(let k in fd){sp.append(k,fd[k])};body=sp.toString()
-        }
-      }else{
-        let fd=extractFormData(el);
-        let sp=new URLSearchParams();for(let k in fd){sp.append(k,fd[k])};
-        u=new window.URL(u.href.split('?')[0]+'?'+sp.toString());
-      }
-      Su();
-      if(method==='GET'){Yy(!!1)}else{Z(u,'',!!1,0,method)}
-    }
-  }
-},
-
-// Log error since I don't have access to console
-mlog=er=>{let dd=new Date();let cur=(localStorage.getItem('error')||'')+`\n${dd}-${JSON.stringify(er).slice(0,200)}`;localStorage.setItem('error',cur.slice(-10000))},
-
-// Fade elem
-fade=el=>{
- if(vdld||(isFading && el===currentFadeEl))return;
-  currentFadeEl=el;
-  pb.style.width='0%';
-  isFading=!!1;
-  var op=1;
-  var fps=1000/60;
-  function decrease(){
-    op-=0.01;
-    if(op<=0){
-     if(el.id==='pg'){ So();K();U('');
-      el.style.opacity=1;}else{el.style.display='none';el.style.opacity=1}
-     isFading=!!0;
-      return !!1;
-    }
-    el.style.opacity=op;
-    if(window.requestAnimationFrame!=='undefined')window.requestAnimationFrame(decrease);
-    else setTimeout(decrease,fps);
-  }
-  decrease();
+  }, 1000);
 };
 
-// Events
-iu.onkeyup=i=>{if(i.key==='Enter'){Yy(!!1);pb.style.width='0%'}};
-iu.ondblclick=()=>fade(pg);
-msgs.ondblclick=()=>{
- if(audPlayer){adjustPlayRate();
- }else{
-  fade(pg);
- }
-};
-prevMedia.onclick=()=>{
- if(keyList.length===0)return;
- let pInd=currentMediaIndex-1;
-  if(pInd<0)pInd=keyList.length-1;
- showMedia(keyList[pInd],-1);
-};
-nextMedia.onclick=()=>{
- if(keyList.length===0)return;
- let nInd=currentMediaIndex+1;
- if(nInd>=keyList.length)nInd=0;
- showMedia(keyList[nInd],1);
-};
-pg.ondblclick=()=>fade(pg);
-bck.onclick=async i=>{if(h.length>1){cb.checked=!!0;for(let r of p.values()){if(r.pdf)r.h=!!0} if(!c)await Rw();h.pop();u=h[h.length-1];Su();Yy(!!1) }};
-rf.onclick=i=>{fade(pg);let ckd=cb.checked;if(ckd)cb.checked=!!0;w.close();atmps=1;cngSvr();C();if(ckd)cb.checked=!!1};
-bs.onclick=i=>{dl=!dl;if(dl){dld=!!1;bs.value='↓';k(g(),0)}else{dld=!!0;bs.value=''}};
-sv.ondblclick=i=>{sv.readOnly=!sv.readOnly};
-sv.onkeyup=i=>{if(i.key==='Enter'){sv.readOnly=!!1;C()}};
-hide.onclick=async i=>{let el=ge('dimmsg');
- overlay.style.display='flex';dimmed=!!1;el.style.opacity=1;el.style.display='block';await DL(1500);fade(el);
-};
-d.body.ondblclick=i=>{
-if(dimmed){if(i.target.id==='iu' || i.target.id==='sv')return; overlay.style.display='none';dimmed=!!0}
-};
-
-//allow zooming
-Q('',d,'meta[name="viewport"]').setAttribute('content','user-scalable=yes');
-
-//some init setup
-svrInd=Math.floor(Math.random()*svrs.length);
-const st=l('style');
-st.textContent=cssStyles;
-J(d.head,st);
-ge('icon').onclick=()=>togglePlayerVisible();
-ge('marqueeContent').onclick=()=>adjustPlayRate();
-
-// Playlist and sidebar tabs helpers
-function switchSidebarTab(tab){
-  const btnShows=ge('tab-btn-shows');
-  const btnMusic=ge('tab-btn-music');
-  const contShows=ge('tab-shows');
-  const contMusic=ge('tab-music');
-  if(tab==='shows'){
-    btnShows.classList.add('active');
-    btnMusic.classList.remove('active');
-    contShows.classList.add('active');
-    contMusic.classList.remove('active');
-  }else{
-    btnMusic.classList.add('active');
-    btnShows.classList.remove('active');
-    contMusic.classList.add('active');
-    contShows.classList.remove('active');
+window.stopMSECheckLoop = function () {
+  const S = window.AppState;
+  if (S.mseCheckInterval) {
+    clearInterval(S.mseCheckInterval);
+    S.mseCheckInterval = null;
   }
-}
+};*/
+  window.loadLandingPage =async () => {
+   const S=window.AppState;
+    const demo = new URL('https://burningforsuccess.com/wp-content/uploads/2024/07/Peter-Griffin.jpg');
+   const id='123456789';
+    const shadow = $('#ct').shadowRoot;
+    shadow.innerHTML = `<h2 style="color:#eee;padding:20px">You can download .pdf books/docs now from archive.org. Double-tap right side of doc for Next page; left for Previous. Double-tap upper-middle to zoom in; lower-middle to zoom out.<br><br>Batch download images with the ↓ button.</h2>`;
 
-function renderPlaylist(){
-  const cont=ge('sidebar-playlist');
-  if(!cont) return;
-  if(audList.length===0){
-    cont.innerHTML='<p style="padding:10px;color:#ccc">No tracks in playlist</p>';
-    return;
-  }
-  let html='<ul class="col">';
-  const curIdx=parseInt(audPlayer?.dataset.trackIndex||-1);
-  let trackNum=1;
-  audList.forEach((track,i)=>{
-    const title=track.tags.title||'';
-    const artist=track.tags.artist||'';
-    const text=`${title}${artist? ' - '+artist : ''}`;
-    const isPlaying = i===curIdx;
-    html+=`<li class="playlist-item${isPlaying?' playing':''}" data-index="${i}" draggable="true">`+
-          `<span class="drag-handle">${String.fromCharCode(0x22ee)}${String.fromCharCode(0x22ee)} <span class="track-num">${trackNum}.</span></span>`+
-          `<div class="text-wrapper" style="margin-left:-5px"><div class="marquee-content">${text}</div></div>`+
-          `<label class='custom-cb'><input type="checkbox" class="remove-after"/><span class='checkmark'></span></label>`+
-          `<span class="remove-btn" style='margin-left:-20px;font-size:24px'>|   ✖</span>`+
-          `</li>`;
-   trackNum++;
-  });
-  html+='</ul>';
-  cont.innerHTML=html;
-  Array.from(cont.querySelectorAll('.playlist-item')).forEach(li=>{
-    const idx=parseInt(li.dataset.index);
-    li.querySelector('.text-wrapper').onclick=(e)=>{ e.stopPropagation();playTrack(idx); switchSidebarTab('music'); };
-    li.querySelector('.remove-btn').onclick=e=>{ e.stopPropagation(); removeTrack(idx); };
-    li.querySelector('.remove-after').onchange=e=>{ audList[idx].removeAfter = e.target.checked; };
+   if(!S.isConnected){
+    await waitWhile(null,()=> !S.isConnected,15);
+   }
+    if(S.isConnected){
+    sendRequest(demo, id, false);
+    }
  
-    const dh=li.querySelector('.drag-handle');
-    // drag-and-drop handlers for reordering
-    dh.addEventListener('dragstart',e=>{
-       e.dataTransfer.setData('text/plain', idx);
-    });
-    dh.addEventListener('dragover',e=>{
-       e.preventDefault();
-       li.classList.add('dragover');
-    });
-    dh.addEventListener('dragleave',e=>{
-       li.classList.remove('dragover');
-    });
-    dh.addEventListener('drop',e=>{
-       e.preventDefault();
-       li.classList.remove('dragover');
-       const from = parseInt(e.dataTransfer.getData('text/plain'));
-       const to = parseInt(li.dataset.index);
-       moveTrack(from,to);
-    });
+   if(!S.isMediaConnected){
+    await waitWhile(null,()=>!S.isMediaConnected,100);
+   }
+   if(S.isMediaConnected){
+   try{    $('#cb').checked=true;
+     const demoAud=new URL('https://archive.org/download/tvtunes_2280/Dawsons Creek - 1998.mp3');
+    sendRequest(demoAud,'981276345',false);
+    }catch(e){U(e,'toast')}
+   }
+  };
+  await waitWhile(()=>connectWS(null,'text'),()=>!S.isConnected,15);
+ // await DL(55);
+  await waitWhile(()=>connectWS(null,'media'),()=>!S.isMediaConnected,15);
 
-    // fallback for touch-based reordering: slide finger over another item to swap
-    dh.addEventListener('touchstart',e=>{
-       li._draggingIdx = idx;
-    });
-    dh.addEventListener('touchmove',e=>{
-       e.preventDefault();
-       const touch = e.touches[0];
-       if(!touch) return;
-       const target = document.elementFromPoint(touch.clientX, touch.clientY);
-       const other = target && target.closest('.playlist-item');
-       if(other && other !== li){
-         const to = parseInt(other.dataset.index);
-         moveTrack(li._draggingIdx, to);
-         li._draggingIdx = to;
-       }
-    });
-  });
-}
+  prewarmPool('text').catch(()=>{});
+  prewarmPool('media').catch(()=>{});
 
-function removeTrack(idx){
-  if(idx<0||idx>=audList.length) return;
-  const playingIdx=parseInt(audPlayer?.dataset.trackIndex||-1);
-  audList.splice(idx,1);
-  if(playingIdx===idx){
-    if(audList.length>0){
-      playTrack(playingIdx>=audList.length?0:playingIdx);
-    } else {
-      closePlayer(null);
-    }
-  } else if(playingIdx>idx){
-    audPlayer.dataset.trackIndex = playingIdx-1;
-  }
-  renderPlaylist();
-}
+   setInterval(()=>{
+    if(document.hidden)return;
+   prewarmPool('text').catch(()=>{});
+   prewarmPool('media').catch(()=>{});
+   },20000);
 
-// move a track within the playlist and adjust current index if necessary
-function moveTrack(from, to){
-  if(from===to) return;
-  const item = audList.splice(from,1)[0];
-  audList.splice(to,0,item);
-  if(audPlayer){
-    let cur = parseInt(audPlayer.dataset.trackIndex);
-    if(cur===from){
-      audPlayer.dataset.trackIndex = to;
-    } else if(cur > from && cur <= to){
-      audPlayer.dataset.trackIndex = cur - 1;
-    } else if(cur < from && cur >= to){
-      audPlayer.dataset.trackIndex = cur + 1;
-    }
-  }
-  renderPlaylist();
-}
-
-// wire up tab buttons after elements exist
-ge('tab-btn-shows').onclick=()=>switchSidebarTab('shows');
-ge('tab-btn-music').onclick=()=>switchSidebarTab('music');
-
-// Sidebar toggle
-ge('btnOpn').onclick = () => sidebar.classList.add('open');
-ge('btnCls').onclick = () => sidebar.classList.remove('open');
-
-// Initial setup
-getShows();
-// initialize playlist UI
-renderPlaylist();
-ldpdfJS();
-ldJSMediaTags();
-d.addEventListener('click',(ev)=>{
-//close sidebar when clicking anywhere basically
-const sbar=Q('',d,'.sidebar');
-const btnO=ge('btnOpn');
-if(ev.target===btnO||audDiv.contains(ev.target))return;
-if(sliderActive&&!seekSliderContainer.contains(ev.target)&&!trackTimeDetail.contains(ev.target))hideSeekSlider();
-if(!sbar.contains(ev.target)&&sbar.classList.contains('open')){
-sbar.classList.remove('open');
-}
-});
-
-//randomize server
-cngSvr();
-//sv.value='offal';
-
-//function for loading one first load
-let joke=()=>{
-//cb.checked=!!1;
-//et x='mindfulnessexercises.com/wp-content/uploads/2024/02/Seneca-Quotes.mp3';
- let x='burningforsuccess.com/wp-content/uploads/2024/07/Peter-Griffin.jpg';
-//let quote=`Enjoy a minute or two audio of quotes from the Stoic <a href='https://en.wikipedia.org/wiki/Seneca_the_Younger'>Seneca the Younger</a>`;
-  let quote=`You can download .pdf books/docs now from archive.org or whereever you find them. Just make sure to tap the download link that says .pdf on archive.<p>To turn pages: Double-tap right side of a document for Next page; the opposite for Previous page.<p>Zooming: Double-tap the upper-middle of the page to zoom in; the lower-middle to zoom out.<p>Example: <a href='https://bop.utah.gov/wp-content/uploads/Parole-Notifications-and-Conditions_Dec-2025.pdf'>Utah Parole Conditions</a>`;
- iu.value=x;Yy(!!1);
-W(sd,`<h2>${quote}</h2>`);h.pop();L();
-},
-//need to iniect a parse fumction to URL for pdf.js to fumction
-addURLParse=()=>{
-if(typeof globalThis.URL==='undefined' || globalThis.URL.parse)return;
- globalThis.URL= class URL extends originalURL{ 
-    constructor(url, base=undefined){
-       let finalUrl=url;
-       if(typeof url==='string' && url.startsWith('blob:')){
-       finalUrl=url;
+ setInterval(()=>{
+   try{
+   const S=window.AppState;
+   
+    // reconnect if an active MSE stream has no live media socket
+    if (!S.isMediaConnected || !S.wsMedia || S.wsMedia.readyState !== WebSocket.OPEN) {if(S.medRotating)return;
+      for (const [id, r] of S.requests) {
+        if (r.usesMSE && r.isOpen && !r.dlPaused && !r.fatalError && !r.isRecovering && r.bytesReceived < r.totalBytes) {
+          const resumeObj = {
+            url: r.url,
+            id: r.id,
+            bytesReceived: r.bytesReceived,
+            method: r.method,
+            socketType: 'media'
+          };
+          rotateServer(resumeObj, 'media');
+          break;
+        }
       }
-   super(finalUrl, base);
-  }
-  static parse(url,base){
-   try{return new URL(url,base);}catch{return null}
-  }
- }
-};
-addURLParse();
-//Start it all up
-U('Patience is a virtue...').then(C());
+    }  
+   if(!S.domCache.size)return;
+    S.domCache.forEach((div, id)=>{
+     const r = S.requests.get(id);
+     if(r&& r.usesMSE){checkBuffer(r);}
+    });
+   }catch(_){
+   }
+ },1000);
+  getShows();
+   U(`👀 Clandestine Entertainment - Version: ${S.version}🎵🎥`,'toast');
+   await DL(2300);
+   U('Welcome Friend ✌','toast');
+//  bootstrapWebTorrent();
+})();

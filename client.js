@@ -408,6 +408,127 @@ localStorage.setItem('9',cd.value);
     .chat-model-select{background:var(--bg);border:1px solid var(--text);color:#eee;padding:6px 10px;border-radius:6px;font-size:12px}
     .chat-loading{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Picture‑in‑Picture container ---------- */
+#pipContainer{
+  position:fixed;
+  bottom:12px;
+  right:12px;
+  width:260px;               /* start size – user can resize */
+  height:146px;              /* 16:9 approx for 260px width */
+  background:#111;
+  border:2px solid var(--accent);
+  border-radius:6px;
+  overflow:hidden;
+  z-index:1000002000;        /* above everything */
+  display:none;
+  flex-direction:column;
+  user-select:none;
+  touch-action:none;
+  contain:layout;
+  box-shadow:0 4px 24px rgba(0,0,0,0.45);
+}
+#pipContainer.show{display:flex}
+
+/* title bar – drag handle + close */
+#pipTitleBar{
+  min-height:28px;
+  line-height:28px;
+  background:rgba(0,0,0,0.6);
+  color:#eee;
+  font-size:13px;
+  padding:0 6px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  cursor:grab;
+  user-select:none;
+  pointer-events:auto;
+  flex-shrink:0;
+}
+#pipTitleBar:active{cursor:grabbing}
+#pipTitleLabel{
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  text-align:center;
+  font-weight:600;
+  margin:0 4px;
+}
+#pipCloseBtn,#pipPrevBtn,#pipNextBtn{
+  width:22px;height:22px;
+  background:#444;
+  color:#fff;
+  border:none;
+  border-radius:4px;
+  font-size:13px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  flex-shrink:0;
+}
+#pipCloseBtn{background:#c00;margin-right:4px}
+#pipCloseBtn:hover{background:#e00}
+#pipPrevBtn:hover,#pipNextBtn:hover{background:#666}
+#pipPrevBtn:disabled,#pipNextBtn:disabled,#pipCloseBtn:disabled{opacity:0.45;cursor:not-allowed}
+#pipNavControls{display:flex;gap:4px;margin-left:auto;flex-shrink:0}
+
+/* content area – the media element will be placed here */
+#pipContent{
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+  background:#000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  isolation:isolate;
+}
+#pipContent > .media-content{
+  position:relative;
+  width:100%;
+  height:100%;
+  z-index:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  overflow:hidden;
+  background:#000;
+}
+#pipContent > .media-content > *{
+  max-width:100%;
+  max-height:100%;
+}
+
+/* optional resize handle (bottom‑right) – very lightweight */
+#pipResizeHandle{
+  position:absolute;
+  right:0;bottom:0;
+  width:12px;height:12px;
+  background:rgba(255,255,255,0.2);
+  cursor:se-resize;
+  user-select:none;
+    pointer-events:auto; 
+}
+.pip-mode .media-info-box {
+    display: none !important;
+}
+#pipContainer {
+    min-width: 120px;   /* matches the JS min width */
+    min-height: 80px;   /* matches the JS min height */
+}
+ #pipContent > * {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;   /* keep aspect ratio, never exceed the box */
+}
   `;
   
   const style = doc.createElement('style');
@@ -423,7 +544,6 @@ localStorage.setItem('9',cd.value);
       <div id="media-index" style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);color:#eee;padding:4px 8px;border-radius:4px;font-size:14px;pointer-events:none;z-index:20">
 <span id="media-index-num">0</span> of <span id="media-index-total">0</span>
    </div>
-
   <div id="pdf-nav">
   <button id="pdf-dark-toggle" style="padding:4px 8px;background:var(--accent);border:none;border-radius:4px;color:#000;font-size:12px">🌚</button>
   <button id="pdf-bookmark-del" style="padding:4px 8px;background:#c00;border:none;border-radius:4px;color:#fff;font-size:12px" title="Delete bookmark">🗑</button>
@@ -431,10 +551,6 @@ localStorage.setItem('9',cd.value);
   of
   <span id="pdf-num-pages" style="padding:4px 12px;background:var(--bg);color:var(--text);border:none">@</span>
 </div>
-  <!--   <div id="pdf-nav">
-     <button id="pdf-dark-toggle" style="padding:4px 8px;background:var(--accent);border:none;border-radius:4px;color:#000;font-size:12px">🌚</button>
-        <input type="number" min=1 id="pdf-page-inp" placeholder="#" style="width:50px;padding:4px;border-radius:4px;border:1px solid var(--accent);background:var(--bg);color:var(--text);text-align:center"> of <span id="pdf-num-pages" style="padding:4px 12px;background:var(--bg)color:var(--text);border:none">@</span>
-    </div>-->
   </div>
   <div class="sticky-header">
     <div>
@@ -454,6 +570,7 @@ localStorage.setItem('9',cd.value);
       </label>
       <input id="bs" type="button" value="↓" />
       <button id="hide">💡</button>
+     <button id="btnPiP" title="Pop‑out media">⛶</button>
       <button id="btnChat">🤖</button>
     </div>
     <div id="msgs" class="msg-container">
@@ -524,7 +641,8 @@ localStorage.setItem('9',cd.value);
   window.AppState = {
    version: 9.0,
    wsEpoch: 0,
-    
+    pipContainer: null,
+   poppedId: null,
 options: (() => {
   const defaults = {
     mseThresholdMB: 45,
@@ -537,7 +655,7 @@ options: (() => {
     nbSamples: 35,
     useToast: false,
     useMediaChunking: false,
-    mediaChunkSize: 2 * 1024 * 1024
+    mediaChunkSize: 1024 * 1024
   };
   const stored = JSON.parse(localStorage.getItem('options') || 'null');
   return stored ? { ...defaults, ...stored } : defaults;
@@ -568,10 +686,13 @@ options: (() => {
     bufferedAhead:0,
    
    };
- let numberedServers =  ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48','49','51','52','53','54'];
+ let numberedServers =  /*['8','9','10','11']*/
+['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48','49','51','52','53','54'];
 
-let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','chatt','dark','harley','kazak','light','mitre','omega','offal','osric','phone','skip','sv1','text','trace','truth','turbo','uwtb','wit','bn','br'];
+let namedServers=/*['light','dark','truth','mitre'];*/
+['m','n','o','p','q','r','s','t','alice','argos','bilboes','chatt','dark','harley','kazak','light','mitre','omega','offal','osric','phone','skip','sv1','text','trace','truth','turbo','uwtb','wit','turbo-fiesta','languid'];
 
+ 
  const servers=numberedServers.concat(namedServers);
  const chunkedMediaServers = numberedServers;
   window.servers = servers;
@@ -605,17 +726,20 @@ let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','ch
 
   window.checkBuffer = async function (r, aggressive = false) {
   if (!r || r.fatalError || r.isRecovering) return;
+  if (!r.usesMSE || !r.videoEl) return;
+    const msReady = r.ms ? r.ms.readyState : null;
+   if (msReady !== 'open' && msReady !== 'ended') return; 
 
   const S = window.AppState;
   const now = Date.now();
 
   // watchdog: unlock a stuck checkBuffer
-  if (r.checkingBuffer && r._checkBufferStartedAt && (now - r._checkBufferStartedAt > 20000)) {
+  if (r.checkingBuffer && r._checkBufferStartedAt && (now - r._checkBufferStartedAt > 15000)) {
     r.checkingBuffer = false;
   }
   if (r.checkingBuffer) return;
 
-  if (!r.usesMSE || !r.ms || r.ms.readyState !== 'open' || !r.videoEl) return;
+ // if (!r.usesMSE || !r.ms || r.ms.readyState !== 'open'  || !r.videoEl) return;
 
   try {
     r.checkingBuffer = true;
@@ -633,7 +757,7 @@ let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','ch
       }
     }
     r.bufferedAhead = buffAhead;
-    S.bufferedAhead = buffAhead;
+    S.bufferedAhead = buffAhead;//can delete??
 
     const BUFFER_AHEAD_TARGET = (S.options.useSmartDefaults && r.smartBuffer)
       ? r.smartBuffer.bufferTarget
@@ -709,7 +833,7 @@ let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','ch
         return;
       }
 
-      U(`Stall detected (${Math.round(idle / 1000)}s). Rotating #${r.staleRotations}…`, 'toast');
+      U(`Stall detected (${Math.round(idle / 1000)}s). Rotating #${r.staleRotations}…`);
 
       r.isRecovering = true;
       try {
@@ -745,6 +869,7 @@ let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','ch
       return;
     }
 
+   //this is causing biffer errors
     // 5. In chunk mode, fire the next chunk if nothing is in flight
     if (wsAlive && needMore && !r.dlPaused && r.useChunking && !r._chunkPending) {
 //      sendChunkRequest(r);
@@ -775,191 +900,7 @@ let namedServers= ['m','n','o','p','q','r','s','t','alice','argos','bilboes','ch
     });
   }
 };
- /*  window.checkBuffer = async function (r, aggressive = false) {
-  if (r.fatalError) return;
 
-  const S = window.AppState;
-  const now = Date.now();
-
-  if (r.checkingBuffer && r._checkBufferStartedAt && (now - r._checkBufferStartedAt > 20000)) {
-    r.checkingBuffer = false;
-  }
-  if (r.checkingBuffer || r.isRecovering) return;
-
-  try {
-    r.checkingBuffer = true;
-    r._checkBufferStartedAt = now;
-
-    if (!r.ms || r.ms.readyState !== 'open' || !r.usesMSE || !r.videoEl) return;
-
-    const vid = r.videoEl;
-    const ct = vid.currentTime || 0;
-    let buffAhead = 0;
-    const buf = vid.buffered;
-    for (let i = 0; i < buf.length; i++) {
-      if (ct >= buf.start(i) && ct <= buf.end(i)) {
-        buffAhead = buf.end(i) - ct;
-        break;
-      }
-    }
-    r.bufferedAhead = buffAhead;
-    S.bufferedAhead = buffAhead;
-
-    let BUFFER_AHEAD_TARGET, BUFFER_AHEAD_MAX, BUFFER_BEHIND_CLEAN;
-    if (S.options.useSmartDefaults && r.smartBuffer) {
-      BUFFER_AHEAD_TARGET = r.smartBuffer.bufferTarget;
-      BUFFER_AHEAD_MAX = r.smartBuffer.maxAheadTime;
-      BUFFER_BEHIND_CLEAN = r.smartBuffer.cleanupBehind;
-    } else {
-      BUFFER_AHEAD_TARGET = S.options.bufferTarget || 90;
-      BUFFER_AHEAD_MAX = S.options.maxBufferAhead || 180;
-      BUFFER_BEHIND_CLEAN = S.options.cleanupBehind || 12;
-    }
-
-    const wsAlive = S.wsMedia && S.wsMedia.readyState === WebSocket.OPEN && S.isMediaConnected && !S.medRotating;
-
-    const stillNeedData =
-      r.isOpen && !r.dlPaused && !r.fatalError && r.bytesReceived < r.totalBytes;
-    const expectingData = stillNeedData && wsAlive && buffAhead < BUFFER_AHEAD_TARGET;
- //  r.expectingData=expectingData;
-    const dataIdle = now - (r.lastDataAt || r.lastActivity || now);
-    const chunkIdle = now - (r.lastChunkAt || now);
-    const chunkStuck = r.useChunking && r._chunkPending && chunkIdle > 8000;
-
-    if (expectingData && (dataIdle > 6000 || chunkStuck)) {
-      r.staleRotations = (r.staleRotations || 0) + 1;
-
-      if (r.staleRotations > 8) {
-        U('Server keeps dropping — pausing stream.', 'toast');
-        r.dlPaused = true;
-        r.isRecovering = false;
-        closeMediaWS();
-        showResumeOptions(r);
-        return;
-      }
-
-      U(`Stall detected (${Math.round(Math.max(dataIdle, chunkIdle) / 1000)}s). Rotating (#${r.staleRotations})…`, 'toast');
-      r._chunkPending = false;
-      r._chunkDone = false;
-      r.lastActivity = now;
-      r.lastDataAt = now;
-      r.lastChunkAt = now;
-      r.isRecovering = true;
-      try {
-        await rotateServer({
-          url: r.url,
-          id: r.id,
-          bytesReceived: r.expectedOffset ?? r.bytesReceived,
-          method: r.method,
-          socketType: 'media'
-        }, 'media');
-      } finally {
-        r.isRecovering = false;
-      }
-      return;
-    }
-
-    if (r.staleRotations && dataIdle < 4000) r.staleRotations = 0;
-
-    if (vid.seeking) return;
-
-    const bufferFull = buffAhead >= BUFFER_AHEAD_MAX;
-    const sessionLimitReached = r.sessionDL && r.sessionDL > 200 * 1024 * 1024;
-
-    if (!bufferFull && r.dlPaused && buffAhead <= BUFFER_AHEAD_TARGET + 12) {
-      prewarmPool('media').catch(() => {});
-    }
-
-    if (bufferFull || sessionLimitReached) {
-      if (!r.dlPaused) {
-        r.dlPaused = true;
-        r._chunkPending = false;
-        r.sessionDL = 0;
-       if(S.mseCheckInterval){clearInterval(S.mseCheckInterval);S.mseCheckInterval=null}
-        U(bufferFull
-          ? `Download paused – buffer ahead ≥ ${BUFFER_AHEAD_MAX}s`
-          : 'Download paused — session limit');
-        closeMediaWS();
-        S.domCache.forEach(div => {
-          if (div.requestId === r.id) {
-            setTimeout(() => div.infoBox.classList.remove('show', 'expanded'), 3000);
-          }
-        });
-      }
-      return;   // don't also try to resume on the same tick
-    }
-
-    if (r.dlPaused && !r.userPaused && buffAhead < BUFFER_AHEAD_TARGET) {
-      r.dlPaused = false;
-      r._chunkPending = false;
-      r._chunkDone = false;
-      S.domCache.forEach(div => {
-        if (div.requestId === r.id) div.infoBox.classList.add('show');
-      });
-      U(`Resuming download – buffer ahead < ${BUFFER_AHEAD_TARGET}s`);
-
-      if (wsAlive) {
-        sendChunkRequest(r);
-      } else {
-        r.isRecovering = true;
-        try {
-          await rotateServer({
-            url: r.url,
-            id: r.id,
-            bytesReceived: r.expectedOffset ?? r.bytesReceived,
-            method: r.method,
-            socketType: 'media'
-          }, 'media');
-        } finally {
-          r.isRecovering = false;
-        }
-      }
-      return;
-    }
-
-    if (!wsAlive && r.isOpen && !r.dlPaused && !r.fatalError && !r.isRecovering && r.bytesReceived < r.totalBytes) {
-      U('Media socket missing — reconnecting', 'toast');
-      r.isRecovering = true;
-      try {
-        await rotateServer({
-          url: r.url,
-          id: r.id,
-          bytesReceived: r.expectedOffset ?? r.bytesReceived,
-          method: r.method,
-          socketType: 'media'
-        }, 'media');
-      } finally {
-        r.isRecovering = false;
-      }
-      return;
-    }
-
-    const removeUpTo = ct - BUFFER_BEHIND_CLEAN;
-    if (removeUpTo > 0) {
-      for (const sb of r.ms.sourceBuffers) {
-        if (!sb.updating && sb.buffered.length > 0) {
-          const start = sb.buffered.start(0);
-          if (start < removeUpTo) {
-            try { sb.remove(0, removeUpTo); } catch (e) { U(`SB Remove Error: ${e}`); }
-          }
-        }
-      }
-    }
-
-    if (r.bytesReceived >= r.totalBytes && r.eosSent && r.ms.readyState === 'open') {
-      try { r.ms.endOfStream(); } catch (_) {}
-    }
-  } finally {
-    r.checkingBuffer = false;
-    r._checkBufferStartedAt = null;
-    try {
-      S.domCache.forEach(div => {
-        if (div.requestId === r.id) updateMSEInfoBox(div);
-      });
-    } catch (_) {}
-  }
-};*/
- 
   window.clearRequestTimeouts= () =>{
    const tab = AppState.tabs.find(t=>t.id===AppState.activeTabId);
   if(!tab)return;
@@ -1280,8 +1221,8 @@ window.showToast = (txt) => {
 const IMAGE_BATCH_SIZE      = 9;
 const MAX_CONCURRENT_IMAGES = 3;   // lower = fewer CF subrequest errors
 const IMAGE_BATCH_TIMEOUT   = 9000;
-const IMAGE_PER_TIMEOUT     = 7000;
-const MAX_IMAGE_ATTEMPTS    = 10;
+const IMAGE_PER_TIMEOUT     = 4000;
+const MAX_IMAGE_ATTEMPTS    = 6;
 
 function getUnloadedImages() {
   return Array.from($('#ct').shadowRoot.querySelectorAll('img[data-pq]'))
@@ -1443,7 +1384,7 @@ window.prewarmConnection = (idx, socketType = 'text', req = null) => new Promise
   ws.onclose = () => finish(false);
   ws.onerror = () => finish(false);
 
-  // Cloudflare seems can be slow on cold starts
+  // Cloudflare seems to be slow on cold starts
    setTimeout(() => finish(false), 15000);
 });
 
@@ -1564,10 +1505,10 @@ window.createAndConnectWS = (serverIdx, socketType, resumeRequest) => {
    S[wsKey]=null;
    }
     S[wsKey] = ws;
- //   bindSocket(ws, socketType);
 
     ws.onopen = () => {
-      if (resolved) return;bindSocket(ws,socketType);
+      if (resolved) return;
+      bindSocket(ws,socketType);
       resolved = true;
       activateSocket(ws, socketType, resumeRequest);
       resolve(true);
@@ -1598,7 +1539,7 @@ window.createAndConnectWS = (serverIdx, socketType, resumeRequest) => {
   for (let i = pool.length - 1; i >= 0; i--) {
     const p = pool[i];
     const stale = p.ws.readyState !== WebSocket.OPEN ||
-                  (p.createdAt && now - p.createdAt > 60000);//1 min
+                  (p.createdAt && now - p.createdAt > 45000);//1 min
     if (stale) {
       try { p.ws.close(); } catch (_) {}
       pool.splice(i, 1);
@@ -2135,7 +2076,7 @@ r.lastChunkAt  = Date.now();
       r.accSize+=payload.length;
     if(!r.sessionDL)r.sessionDL=0;
      r.sessionDL+=payload.length;
- //  if(r.sessionDL > 202*1024*1024)r.sessionDL=0;//reset
+
     const pct = Math.min((r.bytesReceived/r.totalBytes)*100,100).toFixed(1);
     updateDLProgress(`Streaming: ${pct}% • ${(r.bytesReceived/1048576).toFixed(2)}MB`);
   //const ACC_THRESHOLD = r.moovParsed ? Math.min(1024*1024,Math.max(512*1024,(r.bitrate || 5000000)/5)) : 512*1024;
@@ -2474,7 +2415,7 @@ window.handleVideoError = (r) => {
   if (!vid?.error) return;
   const map = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'NOT_SUPPORTED' };
   const label = map[vid.error.code] || 'UNKNOWN';
-  stopMSEStream(r, `Video error ${vid.error.code} (${label})`);
+  stopMSEStream(r, `Video error: ${vid.error} | ${vid.error.code} (${label})`);
 };
 
  function reInitSegs(r){
@@ -2509,31 +2450,16 @@ window.handleVideoError = (r) => {
        }
      });
  
- /* vid.addEventListener('pause', () => {
-    if(r.dlPaused){
- //    r.userPaused = true;
-  //   r.dlPaused = true;
-     closeMediaWS();}
-     // loop is stopped automatically because r.dlPaused makes anyActive false
-   });
+/* vid.addEventListener('play', () => {
+ r.userPaused = false;   // explicit user play cancels a stop-button pause
+  startMSECheckLoop();
+});
 
-   vid.addEventListener('play', () => {
-     r.userPaused = false;
-     r.dlPaused = false;
-     startMSECheckLoop();
+vid.addEventListener('pause', () => {
+  // Don't stop buffering immediately – let checkBuffer decide once target is reached.
+  startMSECheckLoop();
+});*/
 
-     if (!S.isMediaConnected || !S.wsMedia || S.wsMedia.readyState !== WebSocket.OPEN) {
-       rotateServer({
-         url: r.url,
-         id: r.id,
-         bytesReceived: r.expectedOffset ?? r.bytesReceived,
-         method: r.method,
-         socketType: 'media'
-       }, 'media');
-     } else {
-       sendChunkRequest(r);
-     }
-   });*/
    vid.addEventListener('seeking', async () => {
   if (!r.moovParsed) return;
   const ct = vid.currentTime;
@@ -2571,7 +2497,7 @@ try{
 r.mp4boxFile.flush();r.mp4boxFile.stop();r.mp4boxFile=null;
 }
  r.mp4boxFile=window.AppState.mp4box.createFile();
- // startMSECheckLoop();
+ //  startMSECheckLoop();
      r.mp4boxFile.onMoovStart=()=>{
       r.mseAction='Analyzing...';
       U('Decyphering mp4 meta...');
@@ -2598,7 +2524,7 @@ const effectiveByteRate = trackBitrate ? trackBitrate / 8 : avgByteRate;
 r.bitrate = (trackBitrate || avgByteRate * 8) || 5000000;
 const mbToSec = mb => mb * 1024 * 1024 / effectiveByteRate;
   
- const targetSegDur = 2; // seconds per segment
+ const targetSegDur = 4; // seconds per segment
   
  const nbPerTrack = info.tracks.map(track => {
   const durSec = track.duration / track.timescale;
@@ -2607,8 +2533,8 @@ const mbToSec = mb => mb * 1024 * 1024 / effectiveByteRate;
 });
   if (S.options.useSmartDefaults) {
     r.smartBuffer = {
-      maxAheadTime: Math.max(300, Math.floor(mbToSec(S.options.maxBufferMemoryMB || 150))),
-      bufferTarget: Math.floor(mbToSec(S.options.bufferMemoryTargetMB || 60)),
+      maxAheadTime: Math.max(300, Math.floor(mbToSec(S.options.maxBufferMemoryMB || 100))),
+      bufferTarget: Math.floor(mbToSec(S.options.bufferMemoryTargetMB || 30)),
       cleanupBehind: Math.max(15, Math.floor(duration * 0.05)),
       bitrate: r.bitrate,// avgBitrate,
   //    avgBps
@@ -2657,7 +2583,7 @@ ind=null;
     try { sb.appendBuffer(seg.buffer); }
     catch (e) { U(`Init seg error: ${e.message || e}`); }
   });
-
+ // startMSECheckLoop();
   r.mp4boxFile.start();
 };
     
@@ -2724,6 +2650,108 @@ window.closeMediaWS=()=>{
   updateConnectionIndicator();
 }
 
+window.startMSECheckLoop = function () {
+  const S = window.AppState;
+  if (S.mseCheckInterval) return; // already running
+
+  S.mseCheckInterval = setInterval(() => {
+    // Grab only the active MSE streams we care about
+    const activeStreams = [...S.domCache.values()]
+      .map(div => S.requests.get(div.requestId))
+      .filter(r => r && r.usesMSE && !r.fatalError && r.isOpen);
+
+    if (!activeStreams.length) {
+      // Nothing to monitor – shut the loop down
+      stopMSECheckLoop();
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Decide whether we need another tick.
+    // ----------------------------------------------------------
+    let needAnotherTick = false;
+
+    for (const r of activeStreams) {
+      const vid = r.videoEl;
+      if (!vid) continue; // sanity
+
+      // 1️⃣ If we are playing → always need a tick (show UI)
+      if (!vid.paused) {
+        needAnotherTick = true;
+        break;
+      }
+
+      // 2️⃣ Paused (or stopped) – we only keep ticking while we still
+      //    need more data to reach the target buffer.
+      const targetBuf = (r.smartBuffer?.bufferTarget) ||
+                        (S.options.bufferTarget || 90); // seconds
+
+      // If we haven’t hit the target yet, keep ticking so the buffer can fill.
+      if ((r.bufferedAhead || 0) < targetBuf) {
+        needAnotherTick = true;
+        break;
+      }
+
+      // 3️⃣ Buffer is full *and* we are paused/stopped.
+      //    If the media WS is dead we still need a tick to try a reconnect.
+      const wsAlive = S.wsMedia &&
+                      S.wsMedia.readyState === WebSocket.OPEN &&
+                      S.isMediaConnected;
+
+      if (!wsAlive) {
+        needAnotherTick = true; // try to reconnect
+        break;
+      }
+
+      // If we reach here: buffer full, paused, WS alive → we can stop.
+      // (No need to check the other streams – one false is enough to stop.)
+    }
+
+    // ----------------------------------------------------------
+    // Perform the work for this tick if we decided we need it.
+    // ----------------------------------------------------------
+    if (needAnotherTick) {
+      // Try to reconnect a dead media WS (once per tick, max)
+      if (!S.isMediaConnected ||
+          !S.wsMedia ||
+          S.wsMedia.readyState !== WebSocket.OPEN) {
+        // We deliberately **do not** loop over every stream here –
+        // a single reconnect attempt is enough; the streams will
+        // retry on their own next tick if needed.
+        const resumeObj = {
+          url: null, // will be filled inside rotateServer per‑stream
+          id: null,
+          bytesReceived: null,
+          method: null,
+          socketType: 'media'
+        };
+        // fire‑and‑forget – errors are swallowed inside rotateServer
+        rotateServer(null, 'media').catch(() => {});
+      }
+
+      // Let each stream run its own buffer‑check / housekeeping
+      activeStreams.forEach(r => {
+        try { checkBuffer(r); } catch (_) {}
+      });
+
+      // Update the UI for every MSE card
+      S.domCache.forEach(div => {
+        if (div.requestId && S.requests.get(div.requestId)?.usesMSE) {
+          updateMSEInfoBox(div);
+        }
+      });
+    }
+  }, 1000); // 1‑second granularity
+};
+
+window.stopMSECheckLoop = function () {
+  const S = window.AppState;
+  if (S.mseCheckInterval) {
+    clearInterval(S.mseCheckInterval);
+    S.mseCheckInterval = null;
+  }
+};
+
 window.stopMSEStream = (r, reason) => {
   if (r.fatalError) return;
   r.fatalError = true;
@@ -2736,7 +2764,7 @@ window.stopMSEStream = (r, reason) => {
   if (r.videoEl && !r.videoEl.paused) r.videoEl.pause();
 
   closeMediaWS();
-
+ // stopMSECheckLoop();
   U('Media playback error: ' + reason, 'toast');
 
   window.AppState.domCache.forEach(div => {
@@ -2849,7 +2877,7 @@ if (r.ms && r.ms.readyState === 'open') {
   };
 })();
 
-//## Section 4: Media Player & jsmediatags & image & vids. Hell yeah
+//## Section 4: Media Player & jsmediatags & image & vids. 
 
 (function initMedia() {
   const S = window.AppState;
@@ -2917,6 +2945,7 @@ if (r.ms && r.ms.readyState === 'open') {
     $('#media-index-total').textContent=total;
      $('#media-index').style.opacity=1;
     S.mediaTimeout= setTimeout(()=>$('#media-index').style.opacity=0,3000);
+    if (window.updatePiPButtons) window.updatePiPButtons();
   }
 
  function updatePDFControls() {
@@ -3010,7 +3039,6 @@ function getPDFBookmarkKey(r) {
         };
 
         ws = new WebSocket(`wss://${server}.paytel.workers.dev`);
- //       ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {
           let u = `CMD_KV_${opUp}?key=${encodeURIComponent(key)}`;
@@ -3085,7 +3113,7 @@ window.flushPDFBookmark = async (r) => {
 
     all[key] = { page: p, updated: Date.now() };
     await pdfKVOp('PUT', 'pdfBookmarks', JSON.stringify(all));
-    U(`PDF bookmark saved: page ${p}`, 'toast');
+    U(`PDF bookmark saved: page ${p}`);
   } catch (e) {
     U(`Bookmark save failed: ${e.message || e}`, 'toast');
   } finally {
@@ -3103,7 +3131,7 @@ window.deletePDFBookmark = async (r) => {
   try {
     const all = await loadPDFBookmarks();
     if (!all[key]) {
-      U('No bookmark for this PDF', 'toast');
+      U('No bookmark for this PDF');
       return;
     }
     delete all[key];
@@ -3504,7 +3532,16 @@ mediaEl.ontouchstart = (e) => { showNav(e); toggleInfo(e); e.stopPropagation(); 
   div.appendChild(btn);
   div.appendChild(infoBox); // Add info box
   
-  $('#pl').appendChild(div);
+  const pipIsShowing = !!S.pipContainer?.classList.contains('show');
+
+  if (pipIsShowing) {
+    window.showMediaInPiP(id);
+  } else {
+    const pl = $('#pl');
+    pl.appendChild(div);
+    div.classList.add('active');
+  }
+
   S.domCache.set(id, div);
   S.mediaKeys.push(id);
   S.currentMediaIndex = S.mediaKeys.length - 1;
@@ -3532,20 +3569,24 @@ window.seekMSEToMinute = (id) => {
   
   const infoBox = mediaDiv.infoBox;
   const vid = r.videoEl;
-  
-  // --- Status ---
-  
+   
+  // --- Status ---  
 const statusText = r.fatalError ? 'STOPPED'
   : (r.dlPaused ? 'PAUSED' : (r.isRecovering ? 'PROCESSING' : 'DOWNLOADING'));
 
- infoBox.querySelector('.status').textContent = statusText;
+ //infoBox.querySelector('.status').textContent = statusText;
   
   // --- Action ---
   let action = r.mseAction || 'Waiting';
   if (r.dlPaused) action = 'Paused';
   if (r.isRecovering) action = 'Recovering';
+ const completed=(r.bytesReceived===r.totalBytes)&&(r.bytesReceived>0);
+
+  if(completed){
+    action='Stopped';statusText='COMPLETED';
+  }
   infoBox.querySelector('.action').textContent = action;
-  
+  infoBox.querySelector('.status').textContent=statusText;
   // --- Time: current / total ---
   const currentTime = vid.currentTime || 0;
   const totalTime =(r.ms && r.ms.duration) || vid.duration || 0;
@@ -3590,7 +3631,7 @@ if (smartMax) {
   infoBox.classList.add('fatal');
 } else {
   infoBox.classList.remove('fatal');
-  infoBox.style.borderColor = r.dlPaused ? '#55aa55' : '#ffaa00';
+  infoBox.style.borderColor = r.dlPaused ? '#55aa55' : (completed ? '#4a9eff' : '#ffaa00');
 }
 };
 
@@ -3655,7 +3696,7 @@ if (smartMax) {
         } catch(e){}
         r.ms = null;
       }
-
+     // stopMSECheckLoop();
       // Detach video element from request
       if(r.videoEl) {
         r.videoEl.pause();
@@ -3693,13 +3734,21 @@ if (smartMax) {
     } else if(idx < S.currentMediaIndex){
       S.currentMediaIndex--;                 // fixed: was being set to -1
     }
-
-/*   // --- 3.1 Check and stop mseCheckLoop
-   const stillHasMSE = [...S.requests.values()].some(
-     req => req.usesMSE && req.isOpen && !req.fatalError
-   );
-   if (!stillHasMSE) stopMSECheckLoop();*/
-
+ 
+    // --- 3.1
+    if (S.poppedId === id) {
+      if (S.mediaKeys.length > 0) {
+        const nextIndex = Math.min(idx, S.mediaKeys.length - 1);
+        S.currentMediaIndex = nextIndex;
+        if (S.pipContainer?.classList.contains('show')) {
+          window.showMediaInPiP(S.mediaKeys[nextIndex]);
+        } else {
+          window.hidePiP();
+        }
+      } else {
+        window.hidePiP();
+      }
+    }
     // --- 4. Global download state & WS cleanup ---
     // Mark closed before we check siblings
     if(r){
@@ -3730,6 +3779,7 @@ if (smartMax) {
 
     updateStopButton();   
     updateMediaIndex();
+    if (window.updatePiPButtons) window.updatePiPButtons();
     fade($('#pg'));
     fade($('#pg2'));
   };
@@ -3751,11 +3801,21 @@ if (smartMax) {
   
   function navigateMedia(dir) {
     if (!S.mediaKeys.length) return;
-       S.domCache.get(S.mediaKeys[S.currentMediaIndex])?.classList.remove('active');
+    const currentKey = S.mediaKeys[S.currentMediaIndex];
+    if (currentKey) S.domCache.get(currentKey)?.classList.remove('active');
+
     S.currentMediaIndex = (S.currentMediaIndex + dir + S.mediaKeys.length) % S.mediaKeys.length;
-    S.domCache.get(S.mediaKeys[S.currentMediaIndex])?.classList.add('active');
+    const nextKey = S.mediaKeys[S.currentMediaIndex];
+    const nextDiv = S.domCache.get(nextKey);
+    if (nextDiv) nextDiv.classList.add('active');
+
+    if (S.pipContainer?.classList.contains('show')) {
+      window.showMediaInPiP(nextKey);
+    }
+
     updateMediaIndex();
     updatePDFControls();
+    if (window.updatePiPButtons) window.updatePiPButtons();
   }
 
   // PDF Handling
@@ -3774,47 +3834,7 @@ if (smartMax) {
    };
     addMediaCard(r.id, canvas);
     togglePLDiv();
-    const ctx = canvas.getContext('2d');
-
- /*   pdfjsLib.getDocument(r.objectUrl).promise.then(pdf => {
-      r.pdfDoc = pdf;
-      r.pageNum = 1;
-      r.scale = 1.5;
-      r.pdfNumPages = pdf.numPages;
-
-      const renderPage = num => {
-        pdf.getPage(num).then(page => {
-          const vp = page.getViewport({scale: r.scale});
-          canvas.height = vp.height;
-          canvas.width = vp.width;
-          page.render({canvasContext: ctx, viewport: vp});
-          updatePDFControls();
-          U(`Page ${num} of ${pdf.numPages}`);
-        });
-      };
-      r.renderPage=renderPage;
-    
-      renderPage(1);
-      updatePDFControls();
-
-      canvas.ondblclick = e => {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        if (x < rect.width/3 && r.pageNum > 1) renderPage(--r.pageNum);
-        else if (x > rect.width*2/3 && r.pageNum < pdf.numPages) renderPage(++r.pageNum);
-        else if (x >= rect.width/3 && x <= rect.width*2/3) {
-          const y = e.clientY - rect.top;
-          if (y < rect.height/3) r.scale += 0.2;
-          else if (y > rect.height*2/3) r.scale = Math.max(0.3, r.scale - 0.2);
-          else r.scale = 1.5;
-          renderPage(r.pageNum);
-        }
-      };
-      canvas.onclick=e=>{
-       e.stopPropagation();
-        updatePDFControls();
-      }
-    });*/
+    const ctx = canvas.getContext('2d'); 
 
    pdfjsLib.getDocument(r.objectUrl).promise.then(pdf => {
   r.pdfDoc = pdf;
@@ -3932,6 +3952,287 @@ if (smartMax) {
 
 })();
 
+//##Section 4.2 Picture in Picture (pip)
+(function initPiP() {
+  const S = window.AppState;
+  const doc = document;
+
+  let pipContainer = doc.getElementById('pipContainer');
+  if (!pipContainer) {
+    pipContainer = doc.createElement('div');
+    pipContainer.id = 'pipContainer';
+    pipContainer.innerHTML = `
+      <div id="pipTitleBar">
+        <button id="pipCloseBtn" title="Close picture-in-picture">✕</button>
+        <span id="pipTitleLabel">Media</span>
+        <div id="pipNavControls">
+          <button id="pipPrevBtn" title="Previous media">←</button>
+          <button id="pipNextBtn" title="Next media">→</button>
+        </div>
+      </div>
+      <div id="pipContent"></div>
+      <div id="pipResizeHandle"></div>
+    `;
+    doc.body.appendChild(pipContainer);
+    S.pipContainer = pipContainer;
+  }
+
+  const pipTitle = pipContainer.querySelector('#pipTitleBar');
+  const pipTitleLabel = pipContainer.querySelector('#pipTitleLabel');
+  const pipClose = pipContainer.querySelector('#pipCloseBtn');
+  const pipPrev = pipContainer.querySelector('#pipPrevBtn');
+  const pipNext = pipContainer.querySelector('#pipNextBtn');
+  const pipContent = pipContainer.querySelector('#pipContent');
+  const pipResize = pipContainer.querySelector('#pipResizeHandle');
+
+  let dragInfo = null;
+  let resizeInfo = null;
+
+  function setPiPTitle() {
+    const currentId = S.mediaKeys[S.currentMediaIndex];
+    const req = currentId ? S.requests.get(currentId) : null;
+    const typeLabel = req?.isPDF ? 'PDF' : (req?.isVideo ? 'Video' : (req?.isAudio ? 'Audio' : 'Media'));
+    const countLabel = S.mediaKeys.length ? `${S.currentMediaIndex + 1}/${S.mediaKeys.length}` : '';
+    pipTitleLabel.textContent = countLabel ? `${typeLabel} ${countLabel}` : typeLabel;
+  }
+
+  function updatePiPButtons() {
+    const currentId = S.mediaKeys[S.currentMediaIndex];
+    const req = currentId ? S.requests.get(currentId) : null;
+    const hasMedia = !!currentId;
+    const canNavigate = S.mediaKeys.length > 1;
+    const hasPdf = S.mediaKeys.some(key => !!S.requests.get(key)?.isPDF);
+    const isPdf = !!req?.isPDF;
+
+    pipPrev.disabled = !canNavigate;
+    pipNext.disabled = !canNavigate;
+    pipClose.disabled = !hasMedia;
+
+    const btnPiP = $('#btnPiP');
+    if (btnPiP) {
+      btnPiP.disabled = (hasPdf || !hasMedia);
+      btnPiP.title = hasPdf ? 'PiP unavailable while a PDF is in the carousel' : (hasMedia ? 'Pop-out media' : 'No media');
+    }
+  }
+
+  function restoreCardToPlayer(mediaDiv) {
+    if (!mediaDiv) return;
+    mediaDiv.classList.remove('pip-mode');
+    mediaDiv.style.display = '';
+    mediaDiv.style.width = '';
+    mediaDiv.style.height = '';
+    mediaDiv.style.objectFit = '';
+    if (mediaDiv.infoBox) {
+      mediaDiv.infoBox.style.display = '';
+      mediaDiv.infoBox.classList.remove('show', 'expanded');
+    }
+    const activeId = S.mediaKeys[S.currentMediaIndex];
+    if (activeId && S.domCache.get(activeId) === mediaDiv) {
+      mediaDiv.classList.add('active');
+    } else {
+      mediaDiv.classList.remove('active');
+    }
+  }
+
+  function showMediaInPiP(mediaId) {
+    if (!mediaId) {
+      mediaId = S.mediaKeys[S.currentMediaIndex];
+    }
+    const mediaDiv = mediaId ? S.domCache.get(mediaId) : null;
+    if (!mediaDiv) {
+      hidePiP();
+      return;
+    }
+
+    const pl = $('#pl');
+    const currentPiPCard = pipContent.firstElementChild;
+    if (currentPiPCard && currentPiPCard !== mediaDiv) {
+      const prevId = currentPiPCard.requestId || currentPiPCard.id?.replace('media-', '');
+      if (prevId && S.domCache.has(prevId)) {
+        restoreCardToPlayer(S.domCache.get(prevId));
+      }
+      pipContent.innerHTML = '';
+    }
+
+    if (mediaDiv.parentNode !== pipContent) {
+      if (mediaDiv.parentNode === pl) pl.removeChild(mediaDiv);
+      pipContent.appendChild(mediaDiv);
+    }
+
+    S.domCache.forEach((otherDiv, key) => {
+      if (key !== mediaId) otherDiv.classList.remove('active');
+    });
+
+    mediaDiv.classList.add('pip-mode');
+    mediaDiv.classList.remove('active');
+    mediaDiv.style.position = 'relative';
+    mediaDiv.style.top = '0';
+    mediaDiv.style.left = '0';
+    mediaDiv.style.display = 'flex';
+    mediaDiv.style.width = '100%';
+    mediaDiv.style.height = '100%';
+    mediaDiv.style.objectFit = 'contain';
+    if (mediaDiv.infoBox) {
+      mediaDiv.infoBox.style.display = 'none';
+      mediaDiv.infoBox.classList.remove('show', 'expanded');
+    }
+
+    S.poppedId = mediaId;
+    pipContainer.classList.add('show');
+    pl.style.display = 'none';
+    pl.style.height = '0vh';
+    pl.classList.remove('active');
+
+    setPiPTitle();
+    updatePiPButtons();
+  }
+
+  function hidePiP() {
+    const activePiPId = S.poppedId;
+    if (activePiPId && S.domCache.has(activePiPId)) {
+      const mediaDiv = S.domCache.get(activePiPId);
+      if (mediaDiv && mediaDiv.parentNode === pipContent) {
+        const pl = $('#pl');
+        pl.appendChild(mediaDiv);
+      }
+      restoreCardToPlayer(mediaDiv);
+    }
+
+    pipContainer.classList.remove('show');
+    pipContent.innerHTML = '';
+    S.poppedId = null;
+
+    const pl = $('#pl');
+    pl.style.display = '';
+    pl.style.height = '100vh';
+    pl.classList.add('active');
+
+    setPiPTitle();
+    updatePiPButtons();
+  }
+
+  function ensurePiPInteractions() {
+    function startDrag(e) {
+      if (e.target.closest('button')) return;
+      e.preventDefault();
+      const isTouch = e.type.startsWith('touch');
+      const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+      const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+      const rect = pipContainer.getBoundingClientRect();
+      dragInfo = { offsetX: clientX - rect.left, offsetY: clientY - rect.top };
+      doc.addEventListener(isTouch ? 'touchmove' : 'mousemove', moveDrag, { passive: false });
+      doc.addEventListener(isTouch ? 'touchend' : 'mouseup', endDrag, { passive: false });
+    }
+
+    function moveDrag(e) {
+      if (!dragInfo) return;
+      const isTouch = e.type.startsWith('touch');
+      const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+      const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+      pipContainer.style.left = `${clientX - dragInfo.offsetX}px`;
+      pipContainer.style.top = `${clientY - dragInfo.offsetY}px`;
+    }
+
+    function endDrag() {
+      dragInfo = null;
+      doc.removeEventListener('touchmove', moveDrag);
+      doc.removeEventListener('mousemove', moveDrag);
+      doc.removeEventListener('touchend', endDrag);
+      doc.removeEventListener('mouseup', endDrag);
+    }
+
+    function startResize(e) {
+      e.preventDefault();
+      const isTouch = e.type.startsWith('touch');
+      const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+      const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+      const rect = pipContainer.getBoundingClientRect();
+      resizeInfo = { startX: clientX, startY: clientY, startW: rect.width, startH: rect.height };
+      doc.addEventListener(isTouch ? 'touchmove' : 'mousemove', moveResize, { passive: false });
+      doc.addEventListener(isTouch ? 'touchend' : 'mouseup', endResize, { passive: false });
+    }
+
+    function moveResize(e) {
+      if (!resizeInfo) return;
+      const isTouch = e.type.startsWith('touch');
+      const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+      const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+      const dx = clientX - resizeInfo.startX;
+      const dy = clientY - resizeInfo.startY;
+      const w = Math.max(120, resizeInfo.startW + dx);
+      const h = Math.max(80, resizeInfo.startH + dy);
+      pipContainer.style.width = `${w}px`;
+      pipContainer.style.height = `${h}px`;
+    }
+
+    function endResize() {
+      resizeInfo = null;
+      doc.removeEventListener('touchmove', moveResize);
+      doc.removeEventListener('mousemove', moveResize);
+      doc.removeEventListener('touchend', endResize);
+      doc.removeEventListener('mouseup', endResize);
+    }
+
+    pipTitle.addEventListener('mousedown', startDrag, false);
+    pipTitle.addEventListener('touchstart', startDrag, { passive: false });
+    pipResize.addEventListener('mousedown', startResize, false);
+    pipResize.addEventListener('touchstart', startResize, { passive: false });
+  }
+
+  ensurePiPInteractions();
+  updatePiPButtons();
+  setPiPTitle();
+
+  window.togglePiP = function (mediaId) {
+    if (!mediaId) return;
+    if (S.poppedId === mediaId) {
+      hidePiP();
+    } else {
+      showMediaInPiP(mediaId);
+    }
+  };
+
+  window.popOutMedia = showMediaInPiP;
+  window.popInMedia = hidePiP;
+  window.showMediaInPiP = showMediaInPiP;
+  window.hidePiP = hidePiP;
+  window.updatePiPButtons = updatePiPButtons;
+
+  pipClose.addEventListener('click', () => {
+    if (S.poppedId) {
+      hidePiP();
+    } else if (S.mediaKeys.length) {
+      const curId = S.mediaKeys[S.currentMediaIndex];
+      if (curId) window.togglePiP(curId);
+    }
+  });
+
+  pipPrev.addEventListener('click', () => navigateMedia(-1));
+  pipNext.addEventListener('click', () => navigateMedia(1));
+
+  window.addPiPToggleToMediaCard = function (mediaDiv) {
+    const req = mediaDiv.requestId ? S.requests.get(mediaDiv.requestId) : null;
+    if (req?.isPDF) return;
+
+    const btn = doc.createElement('button');
+    btn.title = 'Pop‑out / Picture‑in‑Picture';
+    btn.innerHTML = '⛶';
+    btn.style.position = 'absolute';
+    btn.style.top = '4px';
+    btn.style.right = '4px';
+    btn.style.background = 'rgba(255,255,255,0.2)';
+    btn.style.border = 'none';
+    btn.style.color = '#eee';
+    btn.style.fontSize = '18px';
+    btn.style.borderRadius = '4px';
+    btn.style.cursor = 'pointer';
+    btn.onclick = () => {
+      const id = mediaDiv.requestId;
+      if (id) window.togglePiP(id);
+    };
+    mediaDiv.appendChild(btn);
+  };
+})();
 //## Section 5: Sidebar, Chat & Bootstrap
 
 (function initSidebar() {
@@ -3946,12 +4247,7 @@ if (smartMax) {
   $('#tab-btn-music').onclick = () => switchTab('music');
   $('#btnOpn').onclick = () => {
     $('#sidebar').classList.add('open');
-  //  $('#btnCls').style.display = 'inline-block';
   };
- /* $('#btnCls').onclick = () => {
-    $('#sidebar').classList.remove('open');
-    $('#btnCls').style.display = 'none';
-  };*/
 
   window.getShows = () => {
     let ws = new WebSocket('wss://mitre.paytel.workers.dev');
@@ -4142,7 +4438,8 @@ if (smartMax) {
 // Bootstrap
 (async function bootstrap() {
   const S = window.AppState;
-  try{//clear any intervals from paytel
+  try{
+  //clear any intervals from paytel
   const topInt=setInterval(function(){},0);
   for (var i=topInt;i>0;i--){
     window.clearInterval(i);
@@ -4329,7 +4626,12 @@ if (smartMax) {
     $('#overlay').style.display = 'flex';
     }
   };
-  
+ $('#btnPiP').onclick = () => {
+  if (S.mediaKeys.length) {
+    const curId = S.mediaKeys[S.currentMediaIndex];
+    window.togglePiP(curId);
+  }
+};  
 $('#tab-btn-options').onclick = () => switchTab('options');
 
 const optsDiv = $('#sidebar-options');
@@ -4370,7 +4672,6 @@ optsDiv.innerHTML = `
     <label style="font-size:11px;opacity:0.8">mp4box nbSamples</label>
     <input id="opt-nbsamples" type="number" value="${S.options.nbSamples}" min="1" max="200"
       style="padding:6px;background:#111;border:1px solid #555;color:#eee;border-radius:4px">
- 
    
     <label class="custom-cb" style="padding:0;margin-top:4px">
       <input id="opt-chunking" type="checkbox" ${S.options.useMediaChunking ? 'checked' : ''}>
@@ -4440,9 +4741,8 @@ $('#opt-save').onclick = () => {
    revokeAllRequests();
   window.onerror=null;
 
- 
   [...(S.wsPool?.text || []), ...(S.wsPool?.media || [])].forEach(({ws}) => {
-    try { ws.onclose = ws.onopen = ws.onmessage = ws.onerror = null; ws.close(); } catch (_) {}
+    try { ws.onclose = ws.onopen = ws.onmessage = ws.onerror = null; ws.close();ws=null } catch (_) {}
   });
 
 });
@@ -4455,7 +4755,6 @@ $('#opt-save').onclick = () => {
         !$('#aud-wrapper').contains(e.target) &&
         !$('#seekSliderContainer').contains(e.target)) {
        sb.classList.remove('open');
-    //   $('#btnCls').style.display = 'none';
     }
     
     if (S.sliderActive && 
@@ -4464,8 +4763,7 @@ $('#opt-save').onclick = () => {
       hideSeekSlider();
     }
   });
-
-  
+ 
   // Load libraries via proxy
   const loadLib = (url, cb, svr=null) => {
     let ws = new WebSocket(`wss://${svr || servers[Math.floor(Math.random()*servers.length)]}.paytel.workers.dev`);
@@ -4523,59 +4821,7 @@ $('#opt-save').onclick = () => {
     S.mp4boxLoaded = true;//U(typeOf S.mp4box.createFile);
    URL.revokeObjectURL(objUrl);
   };
- /* window.startMSECheckLoop = function () {
-  const S = window.AppState;
-  if (S.mseCheckInterval) return;
-
-  S.mseCheckInterval = setInterval(() => {
-    let anyActive = false;
-
-    S.domCache.forEach((div, id) => {
-      const r = S.requests.get(id);
-      if (r && r.usesMSE && r.isOpen && !r.fatalError && !r.dlPaused) {
-        anyActive = true;
-        checkBuffer(r).catch(() => {});
-      }
-    });
-
-    if (!anyActive) {
-      stopMSECheckLoop();
-      return;
-    }
-
-    // one global media reconnect attempt per tick, only if we need it
-    if (!S.isMediaConnected || !S.wsMedia || S.wsMedia.readyState !== WebSocket.OPEN) {
-      if (S.medRotating) return;
-      for (const [id, r] of S.requests) {
-        if (
-          r.usesMSE &&
-          r.isOpen &&
-          !r.dlPaused &&
-          !r.fatalError &&
-          !r.isRecovering &&
-          r.bytesReceived < r.totalBytes
-        ) {
-          rotateServer({
-            url: r.url,
-            id: r.id,
-            bytesReceived: r.expectedOffset ?? r.bytesReceived,
-            method: r.method,
-            socketType: 'media'
-          }, 'media');
-          break;
-        }
-      }
-    }
-  }, 1000);
-};
-
-window.stopMSECheckLoop = function () {
-  const S = window.AppState;
-  if (S.mseCheckInterval) {
-    clearInterval(S.mseCheckInterval);
-    S.mseCheckInterval = null;
-  }
-};*/
+ 
   window.loadLandingPage =async () => {
    const S=window.AppState;
     const demo = new URL('https://burningforsuccess.com/wp-content/uploads/2024/07/Peter-Griffin.jpg');
@@ -4593,12 +4839,12 @@ window.stopMSECheckLoop = function () {
    if(!S.isMediaConnected){
     await waitWhile(null,()=>!S.isMediaConnected,100);
    }
-   if(S.isMediaConnected){
+  /* if(S.isMediaConnected){
    try{    $('#cb').checked=true;
      const demoAud=new URL('https://archive.org/download/tvtunes_2280/Dawsons Creek - 1998.mp3');
     sendRequest(demoAud,'981276345',false);
     }catch(e){U(e,'toast')}
-   }
+   }*/
   };
   await waitWhile(()=>connectWS(null,'text'),()=>!S.isConnected,15);
  // await DL(55);
@@ -4641,6 +4887,7 @@ window.stopMSECheckLoop = function () {
    }catch(_){
    }
  },1000);
+   //startMSECheckLoop();
   getShows();
    U(`👀 Clandestine Entertainment - Version: ${S.version}🎵🎥`,'toast');
    await DL(2300);

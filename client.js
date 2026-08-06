@@ -348,6 +348,7 @@ localStorage.setItem('9',cd.value);
     
     .md-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);padding:8px;font-size:28px;z-index:11;opacity:0;transition:opacity 0.6s ease}
     .md-nav.show{opacity:1}
+    .md-nav.pip-card-toggle{top:auto;left:auto;bottom:10px;right:10px;transform:none}
     #prev-media{left:10px}
     #next-media{right:10px}
     
@@ -570,7 +571,6 @@ localStorage.setItem('9',cd.value);
       </label>
       <input id="bs" type="button" value="↓" />
       <button id="hide">💡</button>
-     <button id="btnPiP" title="Pop‑out media">⛶</button>
       <button id="btnChat">🤖</button>
     </div>
     <div id="msgs" class="msg-container">
@@ -643,6 +643,7 @@ localStorage.setItem('9',cd.value);
    wsEpoch: 0,
     pipContainer: null,
    poppedId: null,
+pipMediaIds: [],
 options: (() => {
   const defaults = {
     mseThresholdMB: 45,
@@ -3401,7 +3402,7 @@ $('#pdf-bookmark-del').onclick = () => {
     vid.style.height = '100%';
     vid.style.objectFit = 'contain';
     addMediaCard(r.id, vid);
-    togglePLDiv();
+    if (!S.pipContainer?.classList.contains('show')) togglePLDiv();
     S.videoDownloading = false;
    U('Loading video...done!');
     setTimeout(()=>fade($('#pg')),2000);
@@ -3432,7 +3433,7 @@ $('#pdf-bookmark-del').onclick = () => {
         img.style.objectFit = 'contain';
         addMediaCard(r.id, img);
        U('Image loaded');
-        togglePLDiv();
+        if (!S.pipContainer?.classList.contains('show')) togglePLDiv();
         setTimeout(()=>fade($('#pg')),1000);
        }else {
         const imgEl = container.querySelector(`img[data-pq="${r.id}"]`);
@@ -3523,13 +3524,25 @@ const showNav = (e) => {
 div.ontouchstart  = (e) => { showNav(e); toggleInfo(e); e.stopPropagation(); };
 mediaEl.ontouchstart = (e) => { showNav(e); toggleInfo(e); e.stopPropagation(); };
  
+  const req = S.requests.get(id);
   const btn = el('button');
   btn.className = 'media-close-btn';
   btn.textContent = 'X';
   btn.onclick = () => { try{closeMedia(id);}catch(e){U(e)}}
+
+  const pipBtn = el('button');
+  pipBtn.className = 'md-nav pip-card-toggle';
+  pipBtn.textContent = '⛶';
+  pipBtn.title = 'Pop out to picture-in-picture';
+  pipBtn.onclick = e => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (req && !req.isPDF) window.togglePiP(id);
+  };
   
   div.appendChild(mediaEl);
   div.appendChild(btn);
+  if (!req?.isPDF) div.appendChild(pipBtn);
   div.appendChild(infoBox); // Add info box
   
   const pipIsShowing = !!S.pipContainer?.classList.contains('show');
@@ -3736,12 +3749,13 @@ if (smartMax) {
     }
  
     // --- 3.1
-    if (S.poppedId === id) {
-      if (S.mediaKeys.length > 0) {
-        const nextIndex = Math.min(idx, S.mediaKeys.length - 1);
-        S.currentMediaIndex = nextIndex;
+    S.pipMediaIds = S.pipMediaIds.filter(pid => pid !== id);
+    if (S.poppedId === id || S.pipMediaIds.includes(id)) {
+      if (S.pipMediaIds.length > 0) {
+        const nextId = S.pipMediaIds[0];
+        S.currentMediaIndex = S.mediaKeys.indexOf(nextId);
         if (S.pipContainer?.classList.contains('show')) {
-          window.showMediaInPiP(S.mediaKeys[nextIndex]);
+          window.showMediaInPiP(nextId);
         } else {
           window.hidePiP();
         }
@@ -3796,21 +3810,29 @@ if (smartMax) {
     }
   }
   
-  $('#prev-media').onclick = () => navigateMedia(-1);
-  $('#next-media').onclick = () => navigateMedia(1);
+  $('#prev-media').onclick = () => window.navigateMedia(-1);
+  $('#next-media').onclick = () => window.navigateMedia(1);
   
-  function navigateMedia(dir) {
+  window.navigateMedia = function(dir) {
     if (!S.mediaKeys.length) return;
-    const currentKey = S.mediaKeys[S.currentMediaIndex];
-    if (currentKey) S.domCache.get(currentKey)?.classList.remove('active');
+    const isPiPActive = !!S.pipContainer?.classList.contains('show');
+    const carouselIds = isPiPActive && S.pipMediaIds.length ? S.pipMediaIds : S.mediaKeys;
+    const currentKey = isPiPActive ? (S.poppedId || carouselIds[0]) : S.mediaKeys[S.currentMediaIndex];
+    if (currentKey) {
+      const currentDiv = S.domCache.get(currentKey);
+      if (currentDiv && !isPiPActive) currentDiv.classList.remove('active');
+    }
 
-    S.currentMediaIndex = (S.currentMediaIndex + dir + S.mediaKeys.length) % S.mediaKeys.length;
-    const nextKey = S.mediaKeys[S.currentMediaIndex];
+    const currentIndex = Math.max(0, carouselIds.indexOf(currentKey));
+    const nextIndex = (currentIndex + dir + carouselIds.length) % carouselIds.length;
+    const nextKey = carouselIds[nextIndex];
     const nextDiv = S.domCache.get(nextKey);
-    if (nextDiv) nextDiv.classList.add('active');
 
-    if (S.pipContainer?.classList.contains('show')) {
+    if (isPiPActive) {
       window.showMediaInPiP(nextKey);
+    } else {
+      if (nextDiv) nextDiv.classList.add('active');
+      S.currentMediaIndex = S.mediaKeys.indexOf(nextKey);
     }
 
     updateMediaIndex();
@@ -3833,7 +3855,7 @@ if (smartMax) {
    drkTgl.textContent = isInverted ? '🌚' : '🌝';
    };
     addMediaCard(r.id, canvas);
-    togglePLDiv();
+    if (!S.pipContainer?.classList.contains('show')) togglePLDiv();
     const ctx = canvas.getContext('2d'); 
 
    pdfjsLib.getDocument(r.objectUrl).promise.then(pdf => {
@@ -3963,7 +3985,7 @@ if (smartMax) {
     pipContainer.id = 'pipContainer';
     pipContainer.innerHTML = `
       <div id="pipTitleBar">
-        <button id="pipCloseBtn" title="Close picture-in-picture">✕</button>
+        <button id="pipCloseBtn" title="Move current media back to player">⬆</button>
         <span id="pipTitleLabel">Media</span>
         <div id="pipNavControls">
           <button id="pipPrevBtn" title="Previous media">←</button>
@@ -3988,55 +4010,58 @@ if (smartMax) {
   let dragInfo = null;
   let resizeInfo = null;
 
+  function getPiPCarouselIds() {
+    return (S.pipContainer?.classList.contains('show') && S.pipMediaIds.length) ? S.pipMediaIds : S.mediaKeys;
+  }
+
   function setPiPTitle() {
-    const currentId = S.mediaKeys[S.currentMediaIndex];
+    const carouselIds = getPiPCarouselIds();
+    const currentId = carouselIds.find(id => id === S.poppedId) || carouselIds[0] || S.mediaKeys[S.currentMediaIndex];
     const req = currentId ? S.requests.get(currentId) : null;
     const typeLabel = req?.isPDF ? 'PDF' : (req?.isVideo ? 'Video' : (req?.isAudio ? 'Audio' : 'Media'));
-    const countLabel = S.mediaKeys.length ? `${S.currentMediaIndex + 1}/${S.mediaKeys.length}` : '';
+    const countLabel = carouselIds.length ? `${(carouselIds.indexOf(currentId) + 1) || 1}/${carouselIds.length}` : '';
     pipTitleLabel.textContent = countLabel ? `${typeLabel} ${countLabel}` : typeLabel;
   }
 
   function updatePiPButtons() {
-    const currentId = S.mediaKeys[S.currentMediaIndex];
+    const carouselIds = getPiPCarouselIds();
+    const currentId = carouselIds.find(id => id === S.poppedId) || carouselIds[0] || S.mediaKeys[S.currentMediaIndex];
     const req = currentId ? S.requests.get(currentId) : null;
     const hasMedia = !!currentId;
-    const canNavigate = S.mediaKeys.length > 1;
-    const hasPdf = S.mediaKeys.some(key => !!S.requests.get(key)?.isPDF);
-    const isPdf = !!req?.isPDF;
+    const canNavigate = carouselIds.length > 1;
 
     pipPrev.disabled = !canNavigate;
     pipNext.disabled = !canNavigate;
     pipClose.disabled = !hasMedia;
-
-    const btnPiP = $('#btnPiP');
-    if (btnPiP) {
-      btnPiP.disabled = (hasPdf || !hasMedia);
-      btnPiP.title = hasPdf ? 'PiP unavailable while a PDF is in the carousel' : (hasMedia ? 'Pop-out media' : 'No media');
-    }
   }
 
   function restoreCardToPlayer(mediaDiv) {
     if (!mediaDiv) return;
     mediaDiv.classList.remove('pip-mode');
+    mediaDiv.classList.remove('active');
     mediaDiv.style.display = '';
     mediaDiv.style.width = '';
     mediaDiv.style.height = '';
     mediaDiv.style.objectFit = '';
+    mediaDiv.style.position = '';
+    mediaDiv.style.top = '';
+    mediaDiv.style.left = '';
     if (mediaDiv.infoBox) {
       mediaDiv.infoBox.style.display = '';
       mediaDiv.infoBox.classList.remove('show', 'expanded');
     }
-    const activeId = S.mediaKeys[S.currentMediaIndex];
-    if (activeId && S.domCache.get(activeId) === mediaDiv) {
-      mediaDiv.classList.add('active');
-    } else {
-      mediaDiv.classList.remove('active');
+    const pl = $('#pl');
+    if (mediaDiv.parentNode === pipContent) {
+      pipContent.removeChild(mediaDiv);
+    }
+    if (mediaDiv.parentNode !== pl) {
+      pl.appendChild(mediaDiv);
     }
   }
 
   function showMediaInPiP(mediaId) {
     if (!mediaId) {
-      mediaId = S.mediaKeys[S.currentMediaIndex];
+      mediaId = S.mediaKeys[S.currentMediaIndex] || S.pipMediaIds[0];
     }
     const mediaDiv = mediaId ? S.domCache.get(mediaId) : null;
     if (!mediaDiv) {
@@ -4044,27 +4069,23 @@ if (smartMax) {
       return;
     }
 
-    const pl = $('#pl');
-    const currentPiPCard = pipContent.firstElementChild;
-    if (currentPiPCard && currentPiPCard !== mediaDiv) {
-      const prevId = currentPiPCard.requestId || currentPiPCard.id?.replace('media-', '');
-      if (prevId && S.domCache.has(prevId)) {
-        restoreCardToPlayer(S.domCache.get(prevId));
-      }
-      pipContent.innerHTML = '';
-    }
+    const pipId = mediaDiv.requestId || mediaDiv.id?.replace('media-', '');
+    if (pipId && !S.pipMediaIds.includes(pipId)) S.pipMediaIds.push(pipId);
 
+    const pl = $('#pl');
     if (mediaDiv.parentNode !== pipContent) {
       if (mediaDiv.parentNode === pl) pl.removeChild(mediaDiv);
       pipContent.appendChild(mediaDiv);
     }
 
-    S.domCache.forEach((otherDiv, key) => {
-      if (key !== mediaId) otherDiv.classList.remove('active');
+    mediaDiv.dataset.viewport = 'pip';
+    Array.from(pipContent.children).forEach(child => {
+      const isActive = child === mediaDiv;
+      child.classList.toggle('active', isActive);
+      child.classList.toggle('pip-mode', isActive);
     });
 
     mediaDiv.classList.add('pip-mode');
-    mediaDiv.classList.remove('active');
     mediaDiv.style.position = 'relative';
     mediaDiv.style.top = '0';
     mediaDiv.style.left = '0';
@@ -4077,7 +4098,8 @@ if (smartMax) {
       mediaDiv.infoBox.classList.remove('show', 'expanded');
     }
 
-    S.poppedId = mediaId;
+    S.currentMediaIndex = S.mediaKeys.indexOf(mediaId);
+    S.poppedId = pipId || mediaId;
     pipContainer.classList.add('show');
     pl.style.display = 'none';
     pl.style.height = '0vh';
@@ -4088,18 +4110,17 @@ if (smartMax) {
   }
 
   function hidePiP() {
-    const activePiPId = S.poppedId;
-    if (activePiPId && S.domCache.has(activePiPId)) {
-      const mediaDiv = S.domCache.get(activePiPId);
+    const activeIds = [...S.pipMediaIds];
+    activeIds.forEach(id => {
+      const mediaDiv = S.domCache.get(id);
       if (mediaDiv && mediaDiv.parentNode === pipContent) {
-        const pl = $('#pl');
-        pl.appendChild(mediaDiv);
+        restoreCardToPlayer(mediaDiv);
       }
-      restoreCardToPlayer(mediaDiv);
-    }
+    });
 
     pipContainer.classList.remove('show');
     pipContent.innerHTML = '';
+    S.pipMediaIds = [];
     S.poppedId = null;
 
     const pl = $('#pl');
@@ -4109,6 +4130,24 @@ if (smartMax) {
 
     setPiPTitle();
     updatePiPButtons();
+  }
+
+  function popCurrentMediaBackToPL() {
+    const currentId = S.poppedId || S.pipMediaIds[0];
+    const mediaDiv = currentId ? S.domCache.get(currentId) : null;
+    if (mediaDiv && mediaDiv.parentNode === pipContent) {
+      pipContent.removeChild(mediaDiv);
+      restoreCardToPlayer(mediaDiv);
+    }
+
+    S.pipMediaIds = S.pipMediaIds.filter(id => id !== currentId);
+    if (S.pipMediaIds.length) {
+      const nextId = S.pipMediaIds[0];
+      S.currentMediaIndex = S.mediaKeys.indexOf(nextId);
+      showMediaInPiP(nextId);
+    } else {
+      hidePiP();
+    }
   }
 
   function ensurePiPInteractions() {
@@ -4185,8 +4224,8 @@ if (smartMax) {
 
   window.togglePiP = function (mediaId) {
     if (!mediaId) return;
-    if (S.poppedId === mediaId) {
-      hidePiP();
+    if (S.poppedId === mediaId && S.pipContainer.classList.contains('show')) {
+      popCurrentMediaBackToPL();
     } else {
       showMediaInPiP(mediaId);
     }
@@ -4199,34 +4238,28 @@ if (smartMax) {
   window.updatePiPButtons = updatePiPButtons;
 
   pipClose.addEventListener('click', () => {
-    if (S.poppedId) {
-      hidePiP();
+    if (S.poppedId || S.pipMediaIds.length) {
+      popCurrentMediaBackToPL();
     } else if (S.mediaKeys.length) {
       const curId = S.mediaKeys[S.currentMediaIndex];
       if (curId) window.togglePiP(curId);
     }
   });
 
-  pipPrev.addEventListener('click', () => navigateMedia(-1));
-  pipNext.addEventListener('click', () => navigateMedia(1));
+  pipPrev.addEventListener('click', () => window.navigateMedia(-1));
+  pipNext.addEventListener('click', () => window.navigateMedia(1));
 
   window.addPiPToggleToMediaCard = function (mediaDiv) {
     const req = mediaDiv.requestId ? S.requests.get(mediaDiv.requestId) : null;
     if (req?.isPDF) return;
 
     const btn = doc.createElement('button');
+    btn.className = 'md-nav pip-card-toggle';
     btn.title = 'Pop‑out / Picture‑in‑Picture';
-    btn.innerHTML = '⛶';
-    btn.style.position = 'absolute';
-    btn.style.top = '4px';
-    btn.style.right = '4px';
-    btn.style.background = 'rgba(255,255,255,0.2)';
-    btn.style.border = 'none';
-    btn.style.color = '#eee';
-    btn.style.fontSize = '18px';
-    btn.style.borderRadius = '4px';
-    btn.style.cursor = 'pointer';
-    btn.onclick = () => {
+    btn.textContent = '⛶';
+    btn.onclick = e => {
+      e.stopPropagation();
+      e.preventDefault();
       const id = mediaDiv.requestId;
       if (id) window.togglePiP(id);
     };
@@ -4626,13 +4659,7 @@ if (smartMax) {
     $('#overlay').style.display = 'flex';
     }
   };
- $('#btnPiP').onclick = () => {
-  if (S.mediaKeys.length) {
-    const curId = S.mediaKeys[S.currentMediaIndex];
-    window.togglePiP(curId);
-  }
-};  
-$('#tab-btn-options').onclick = () => switchTab('options');
+ $('#tab-btn-options').onclick = () => switchTab('options');
 
 const optsDiv = $('#sidebar-options');
 optsDiv.innerHTML = `
